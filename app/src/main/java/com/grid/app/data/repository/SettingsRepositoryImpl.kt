@@ -29,21 +29,25 @@ class SettingsRepositoryImpl @Inject constructor(
 
     override fun getSettings(): Flow<UserSettings> {
         return dataStore.data.map { preferences ->
-            UserSettings(
+            val settings = UserSettings(
                 biometricEnabled = preferences[BIOMETRIC_ENABLED] ?: false,
                 showHiddenFiles = preferences[SHOW_HIDDEN_FILES] ?: false,
                 defaultViewMode = ViewMode.valueOf(preferences[DEFAULT_VIEW_MODE] ?: "LIST"),
                 themeMode = ThemeMode.valueOf(preferences[THEME_MODE] ?: "SYSTEM")
             )
+            println("SettingsRepository: Retrieved settings from DataStore: $settings")
+            settings
         }
     }
 
     override suspend fun updateSettings(settings: UserSettings) {
+        println("SettingsRepository: Saving settings to DataStore: $settings")
         dataStore.edit { preferences ->
             preferences[BIOMETRIC_ENABLED] = settings.biometricEnabled
             preferences[SHOW_HIDDEN_FILES] = settings.showHiddenFiles
             preferences[DEFAULT_VIEW_MODE] = settings.defaultViewMode.name
             preferences[THEME_MODE] = settings.themeMode.name
+            println("SettingsRepository: Settings saved to DataStore successfully")
         }
     }
 

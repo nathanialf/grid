@@ -9,10 +9,12 @@ import com.grid.app.domain.usecase.file.CreateDirectoryUseCase
 import com.grid.app.domain.usecase.file.DownloadFileUseCase
 import com.grid.app.domain.usecase.file.ListFilesUseCase
 import com.grid.app.domain.usecase.file.UploadFileUseCase
+import com.grid.app.domain.usecase.settings.GetSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,7 +24,8 @@ class FileBrowserViewModel @Inject constructor(
     private val listFilesUseCase: ListFilesUseCase,
     private val downloadFileUseCase: DownloadFileUseCase,
     private val uploadFileUseCase: UploadFileUseCase,
-    private val createDirectoryUseCase: CreateDirectoryUseCase
+    private val createDirectoryUseCase: CreateDirectoryUseCase,
+    private val getSettingsUseCase: GetSettingsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileBrowserUiState())
@@ -38,10 +41,14 @@ class FileBrowserViewModel @Inject constructor(
                 val connection = getConnectionUseCase(connectionId)
                 currentConnection = connection
 
+                // Load settings to get view mode
+                val settings = getSettingsUseCase().first()
                 _uiState.value = _uiState.value.copy(
                     connectionId = connectionId,
                     connectionName = connection.name,
                     currentPath = initialPath,
+                    viewMode = settings.defaultViewMode.name.lowercase(),
+                    showHiddenFiles = settings.showHiddenFiles,
                     isLoading = false
                 )
 
@@ -164,6 +171,18 @@ class FileBrowserViewModel @Inject constructor(
     fun clearMessage() {
         _uiState.value = _uiState.value.copy(message = null)
     }
+
+    fun handleBackNavigation(): Boolean {
+        val currentPath = _uiState.value.currentPath
+        return if (currentPath != "/" && currentPath.isNotEmpty()) {
+            val parentPath = currentPath.substringBeforeLast("/")
+                .takeIf { it.isNotEmpty() } ?: "/"
+            navigateToDirectory(parentPath)
+            true
+        } else {
+            false
+        }
+    }
 }
 
 data class FileBrowserUiState(
@@ -171,6 +190,8 @@ data class FileBrowserUiState(
     val connectionName: String = "",
     val currentPath: String = "/",
     val files: List<RemoteFile> = emptyList(),
+    val viewMode: String = "list",
+    val showHiddenFiles: Boolean = false,
     val isLoading: Boolean = false,
     val isUploading: Boolean = false,
     val downloadingFiles: Set<String> = emptySet(),

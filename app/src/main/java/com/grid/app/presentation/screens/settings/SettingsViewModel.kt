@@ -29,22 +29,25 @@ class SettingsViewModel @Inject constructor(
 
     private fun loadSettings() {
         viewModelScope.launch {
+            println("SettingsViewModel: Loading settings...")
             _uiState.value = _uiState.value.copy(isLoading = true)
 
             getSettingsUseCase()
                 .catch { exception ->
+                    println("SettingsViewModel: Error loading settings: ${exception.message}")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = exception.message ?: "Failed to load settings"
                     )
                 }
                 .collect { settings ->
+                    println("SettingsViewModel: Loaded settings - biometric: ${settings.biometricEnabled}, hidden: ${settings.showHiddenFiles}, viewMode: ${settings.defaultViewMode}, theme: ${settings.themeMode}")
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         biometricEnabled = settings.biometricEnabled,
                         showHiddenFiles = settings.showHiddenFiles,
-                        defaultViewMode = settings.defaultViewMode.name,
-                        themeMode = settings.themeMode.name,
+                        defaultViewMode = settings.defaultViewMode.name.lowercase(),
+                        themeMode = settings.themeMode.name.lowercase(),
                         error = null
                     )
                 }
@@ -52,22 +55,26 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun updateBiometricEnabled(enabled: Boolean) {
+        println("SettingsViewModel: Updating biometric enabled to: $enabled")
         updateSetting { copy(biometricEnabled = enabled) }
         _uiState.value = _uiState.value.copy(biometricEnabled = enabled)
     }
 
     fun updateShowHiddenFiles(show: Boolean) {
+        println("SettingsViewModel: Updating show hidden files to: $show")
         updateSetting { copy(showHiddenFiles = show) }
         _uiState.value = _uiState.value.copy(showHiddenFiles = show)
     }
 
     fun updateDefaultViewMode(viewMode: String) {
-        updateSetting { copy(defaultViewMode = ViewMode.valueOf(viewMode)) }
+        println("SettingsViewModel: Updating default view mode to: $viewMode")
+        updateSetting { copy(defaultViewMode = ViewMode.valueOf(viewMode.uppercase())) }
         _uiState.value = _uiState.value.copy(defaultViewMode = viewMode)
     }
 
     fun updateThemeMode(theme: String) {
-        updateSetting { copy(themeMode = ThemeMode.valueOf(theme)) }
+        println("SettingsViewModel: Updating theme mode to: $theme")
+        updateSetting { copy(themeMode = ThemeMode.valueOf(theme.uppercase())) }
         _uiState.value = _uiState.value.copy(themeMode = theme)
     }
 
@@ -75,9 +82,14 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val currentSettings = getCurrentSettingsFromState()
+                println("SettingsViewModel: Current settings before update: $currentSettings")
                 val updatedSettings = currentSettings.update()
+                println("SettingsViewModel: Updated settings: $updatedSettings")
                 updateSettingsUseCase(updatedSettings)
+                println("SettingsViewModel: Settings saved successfully")
             } catch (exception: Exception) {
+                println("SettingsViewModel: Error saving settings: ${exception.message}")
+                exception.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     error = exception.message ?: "Failed to update setting"
                 )
@@ -90,8 +102,8 @@ class SettingsViewModel @Inject constructor(
         return com.grid.app.domain.model.UserSettings(
             biometricEnabled = state.biometricEnabled,
             showHiddenFiles = state.showHiddenFiles,
-            defaultViewMode = ViewMode.valueOf(state.defaultViewMode),
-            themeMode = ThemeMode.valueOf(state.themeMode)
+            defaultViewMode = ViewMode.valueOf(state.defaultViewMode.uppercase()),
+            themeMode = ThemeMode.valueOf(state.themeMode.uppercase())
         )
     }
 

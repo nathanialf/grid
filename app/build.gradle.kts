@@ -62,6 +62,11 @@ android {
     }
 }
 
+ksp {
+    arg("dagger.formatGeneratedSource", "disabled")
+    arg("dagger.fastInit", "enabled")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -158,7 +158,8 @@ class AddConnectionViewModel @Inject constructor(
                     hostname = state.formData.hostname,
                     protocol = state.formData.protocol,
                     port = state.formData.port.toIntOrNull() ?: state.formData.protocol.defaultPort,
-                    credentialId = "temp"
+                    credentialId = "temp",
+                    shareName = if (state.formData.shareName.isNotBlank()) state.formData.shareName else null
                 )
 
                 val result = testConnectionUseCase(connection, credential)

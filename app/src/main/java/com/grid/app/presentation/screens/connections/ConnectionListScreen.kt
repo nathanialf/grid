@@ -55,15 +55,19 @@ fun ConnectionListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = onNavigateToAddConnection
+            ExtendedFloatingActionButton(
+                onClick = onNavigateToAddConnection,
+                modifier = Modifier.padding(horizontal = 16.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Add,
-                    contentDescription = "Add Connection"
+                    contentDescription = null
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add Connection")
             }
-        }
+        },
+        floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
         when {
             uiState.isLoading -> {

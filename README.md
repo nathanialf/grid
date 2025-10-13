@@ -5,31 +5,34 @@ A modern Android application for browsing and managing files on remote servers t
 ## Current Status
 
 ### ✅ Working Features
-- **SMB/CIFS**: Successfully connects to Windows shares and SMB servers
-- **UI Framework**: Complete Material 3 interface with navigation
+- **SMB/CIFS**: Successfully connects to Windows shares and SMB servers with full file browsing
+- **File Browser**: Complete file browser with list and grid view modes
+- **Settings System**: Persistent settings with theme switching and view mode preferences  
+- **UI Framework**: Material 3 interface with expressive floating toolbars and navigation
 - **Architecture**: Clean Architecture implementation with Hilt DI
 - **Secure Storage**: Android Keystore encryption for credentials
-- **Connection Management**: Add, edit, and manage server connections
+- **Connection Management**: Add, edit, test, and manage server connections
+
+### ❌ Broken/Non-Functional
+- **SFTP**: Connection failures with cryptography provider issues - completely broken
+- **FTP**: Connection timeout and stability issues - essentially non-functional
 
 ### ⚠️ Known Issues
-- **SFTP**: `keyexchangefactories not set` error preventing connections
-- **FTP**: Connection timeout issues  
-- **Settings**: Theme changes not applying when updated in settings menu
-- **File Operations**: File browsing and transfer features not yet implemented
+- **File Operations**: Download/upload functionality implemented but not fully tested
+- **Connection Testing**: SMB test connections may show false negatives despite working connections
 
 ### 🚧 In Development
-- SFTP connection configuration fixes
-- FTP timeout and connection stability
-- Settings persistence and theme updates
-- File browser interface and operations
+- File upload/download UI with proper file picker integration
+- Enhanced file operations (create, rename, delete)
 - Transfer progress indicators
+- Additional file browser actions
 
 ## Features
 
 ### Protocol Support
-- **FTP** - File Transfer Protocol with secure authentication
-- **SFTP** - SSH File Transfer Protocol with key-based authentication
-- **SMB** - Server Message Block for Windows file sharing
+- **SMB** - Server Message Block for Windows file sharing (✅ Fully functional)
+- **FTP** - File Transfer Protocol with secure authentication (❌ Currently broken)
+- **SFTP** - SSH File Transfer Protocol with key-based authentication (❌ Currently broken)
 
 ### Security & Storage
 - **Encrypted Credentials** - Android Keystore integration for secure credential storage

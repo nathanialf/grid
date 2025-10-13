@@ -43,11 +43,13 @@ class SmbClient @Inject constructor() : NetworkClient {
             val session = conn.authenticate(authContext)
             
             // Try to connect to specified share or discover available shares
-            val shares = if (!connection.shareName.isNullOrEmpty()) {
+            val shareResult = if (!connection.shareName.isNullOrEmpty()) {
                 // Use specified share name
+                println("SMB: Connecting to specified share: ${connection.shareName}")
                 try {
                     val share = session.connectShare(connection.shareName)
                     if (share is DiskShare) {
+                        println("SMB: Successfully connected to share: ${connection.shareName}")
                         share
                     } else {
                         throw Exception("Share '${connection.shareName}' is not a disk share")
@@ -57,20 +59,29 @@ class SmbClient @Inject constructor() : NetworkClient {
                 }
             } else {
                 // Try to connect to available shares
+                println("SMB: No share specified, trying common share names...")
                 val shareNames = listOf("C$", "D$", "E$", "Users", "Public", "shared", "share", "data", "home")
                 var diskShare: DiskShare? = null
+                var successfulShareName: String? = null
                 val failedShares = mutableListOf<String>()
                 
                 for (shareName in shareNames) {
                     try {
+                        println("SMB: Trying share: $shareName")
                         val share = session.connectShare(shareName)
                         if (share is DiskShare) {
+                            println("SMB: Successfully connected to share: $shareName")
                             diskShare = share
+                            successfulShareName = shareName
                             break
                         } else {
                             failedShares.add("$shareName (not a disk share)")
                         }
                     } catch (e: Exception) {
+                        // Only log BAD_NETWORK_NAME as debug, it's expected for non-existent shares
+                        if (e.message?.contains("STATUS_BAD_NETWORK_NAME") != true) {
+                            println("SMB: Share $shareName failed: ${e.message}")
+                        }
                         failedShares.add("$shareName (${e.message})")
                         continue
                     }
@@ -83,6 +94,9 @@ class SmbClient @Inject constructor() : NetworkClient {
                         "Please specify a share name in the connection settings.\n" +
                         "Common share names: Users, Public, shared, C$, D$"
                     )
+                } else {
+                    println("SMB: Connection successful using share: $successfulShareName")
+                    // Don't report failed shares when we found a working one
                 }
                 
                 diskShare
@@ -91,7 +105,7 @@ class SmbClient @Inject constructor() : NetworkClient {
             this@SmbClient.smbClient = client
             this@SmbClient.connection = conn
             this@SmbClient.session = session
-            this@SmbClient.diskShare = shares
+            this@SmbClient.diskShare = shareResult
             
             Result.Success(Unit)
         } catch (e: Exception) {

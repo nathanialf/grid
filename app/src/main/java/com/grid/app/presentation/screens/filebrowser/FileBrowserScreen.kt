@@ -2,9 +2,14 @@
 
 package com.grid.app.presentation.screens.filebrowser
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -12,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -35,6 +41,12 @@ fun FileBrowserScreen(
     LaunchedEffect(connectionId) {
         viewModel.initialize(connectionId)
     }
+
+    BackHandler {
+        if (!viewModel.handleBackNavigation()) {
+            onNavigateBack()
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -56,7 +68,13 @@ fun FileBrowserScreen(
                     }
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = {
+                            if (!viewModel.handleBackNavigation()) {
+                                onNavigateBack()
+                            }
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back"
@@ -74,28 +92,50 @@ fun FileBrowserScreen(
             )
         },
         floatingActionButton = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Card(
+                modifier = Modifier.padding(bottom = 16.dp),
+                shape = RoundedCornerShape(32.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
             ) {
-                SmallFloatingActionButton(
-                    onClick = { viewModel.createDirectory("New Folder") }
+                Row(
+                    modifier = Modifier.padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.CreateNewFolder,
-                        contentDescription = "Create Folder"
-                    )
-                }
-                
-                FloatingActionButton(
-                    onClick = { /* TODO: Implement file picker */ }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Upload,
-                        contentDescription = "Upload File"
-                    )
+                    // New Folder - Secondary action
+                    IconButton(
+                        onClick = { viewModel.createDirectory("New Folder") },
+                        modifier = Modifier.size(56.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CreateNewFolder,
+                            contentDescription = "Create Folder",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    
+                    // Upload - Primary action (more prominent coloring)
+                    FilledIconButton(
+                        onClick = { /* TODO: Implement file picker */ },
+                        modifier = Modifier.size(56.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Upload,
+                            contentDescription = "Upload File",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                 }
             }
-        }
+        },
+        floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
         when {
             uiState.isLoading -> {
@@ -126,38 +166,77 @@ fun FileBrowserScreen(
             }
             
             else -> {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    // Show parent directory if not at root
-                    if (uiState.currentPath != "/") {
-                        item {
-                            ParentDirectoryItem(
-                                onNavigateUp = {
-                                    val parentPath = uiState.currentPath.substringBeforeLast("/")
-                                        .takeIf { it.isNotEmpty() } ?: "/"
-                                    viewModel.navigateToDirectory(parentPath)
+                if (uiState.viewMode == "grid") {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 150.dp),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Show parent directory if not at root
+                        if (uiState.currentPath != "/") {
+                            item {
+                                ParentDirectoryGridItem(
+                                    onNavigateUp = {
+                                        val parentPath = uiState.currentPath.substringBeforeLast("/")
+                                            .takeIf { it.isNotEmpty() } ?: "/"
+                                        viewModel.navigateToDirectory(parentPath)
+                                    }
+                                )
+                            }
+                        }
+                        
+                        items(uiState.files.filter { !it.isHidden || uiState.showHiddenFiles }) { file ->
+                            FileGridItem(
+                                file = file,
+                                onClick = {
+                                    if (file.isDirectory) {
+                                        viewModel.navigateToDirectory(file.path)
+                                    } else {
+                                        // TODO: Implement download with proper local path
+                                        viewModel.downloadFile(file, "/tmp/${file.name}")
+                                    }
                                 }
                             )
                         }
                     }
-                    
-                    items(uiState.files) { file ->
-                        FileItem(
-                            file = file,
-                            onClick = {
-                                if (file.isDirectory) {
-                                    viewModel.navigateToDirectory(file.path)
-                                } else {
-                                    // TODO: Implement download with proper local path
-                                    viewModel.downloadFile(file, "/tmp/${file.name}")
-                                }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Show parent directory if not at root
+                        if (uiState.currentPath != "/") {
+                            item {
+                                ParentDirectoryItem(
+                                    onNavigateUp = {
+                                        val parentPath = uiState.currentPath.substringBeforeLast("/")
+                                            .takeIf { it.isNotEmpty() } ?: "/"
+                                        viewModel.navigateToDirectory(parentPath)
+                                    }
+                                )
                             }
-                        )
+                        }
+                        
+                        items(uiState.files.filter { !it.isHidden || uiState.showHiddenFiles }) { file ->
+                            FileItem(
+                                file = file,
+                                onClick = {
+                                    if (file.isDirectory) {
+                                        viewModel.navigateToDirectory(file.path)
+                                    } else {
+                                        // TODO: Implement download with proper local path
+                                        viewModel.downloadFile(file, "/tmp/${file.name}")
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -380,6 +459,99 @@ private fun formatFileSize(bytes: Long): String {
     }
     
     return "%.1f %s".format(size, units[unitIndex])
+}
+
+@Composable
+private fun ParentDirectoryGridItem(
+    onNavigateUp: () -> Unit
+) {
+    Card(
+        onClick = onNavigateUp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.5f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowUpward,
+                contentDescription = "Parent Directory",
+                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Text(
+                text = "..",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+@Composable
+private fun FileGridItem(
+    file: RemoteFile,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .aspectRatio(1.5f)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = if (file.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile,
+                contentDescription = if (file.isDirectory) "Directory" else "File",
+                modifier = Modifier.size(if (file.isDirectory) 40.dp else 32.dp),
+                tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            Text(
+                text = file.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+            
+            if (!file.isDirectory && file.size > 0) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = formatFileSize(file.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            if (file.isHidden) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Icon(
+                    imageVector = Icons.Default.Visibility,
+                    contentDescription = "Hidden",
+                    modifier = Modifier.size(12.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
 }
 
 @Preview(showBackground = true)

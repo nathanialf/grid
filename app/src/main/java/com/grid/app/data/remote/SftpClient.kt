@@ -14,6 +14,10 @@ import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.kex.BuiltinDHFactories
 import org.apache.sshd.common.kex.KeyExchangeFactory
 import org.apache.sshd.common.signature.BuiltinSignatures
+import org.apache.sshd.common.NamedFactory
+import org.apache.sshd.common.signature.Signature
+import org.apache.sshd.client.ClientBuilder
+import org.apache.sshd.common.util.security.SecurityUtils
 import org.apache.sshd.common.util.io.PathUtils
 import org.apache.sshd.sftp.client.SftpClient as ApacheSftpClient
 import org.apache.sshd.sftp.client.SftpClientFactory
@@ -42,9 +46,22 @@ class SftpClient @Inject constructor(
     
     override suspend fun connect(connection: Connection, credential: Credential): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            // Configure security provider for Android compatibility
+            SecurityUtils.setAPrioriDisabledProvider("BC", true) // Disable BouncyCastle provider
+            
             val client = SshClient.setUpDefaultClient()
             
-            // Use default configuration which should work for most SFTP servers
+            // Set up key exchange factories using the proper transformation
+            client.keyExchangeFactories = NamedFactory.setUpTransformedFactories(
+                false,
+                BuiltinDHFactories.VALUES,
+                ClientBuilder.DH2KEX
+            )
+            @Suppress("UNCHECKED_CAST")
+            client.signatureFactories = ArrayList(BuiltinSignatures.VALUES) as MutableList<NamedFactory<Signature>>
+            
+            // Configure compatibility settings
+            client.serverKeyVerifier = org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier.INSTANCE
             
             client.start()
             
@@ -54,10 +71,17 @@ class SftpClient @Inject constructor(
             // Authenticate
             val authenticated = if (credential.password.isNotEmpty()) {
                 try {
+                    println("SFTP: Starting password authentication for user: ${credential.username}")
                     session.addPasswordIdentity(credential.password)
+                    println("SFTP: Password identity added, attempting auth...")
                     val authResult = session.auth()
-                    authResult.verify(15000).isSuccess
+                    println("SFTP: Auth future created, verifying...")
+                    val isSuccess = authResult.verify(15000).isSuccess
+                    println("SFTP: Auth result: $isSuccess")
+                    isSuccess
                 } catch (e: Exception) {
+                    println("SFTP: Authentication failed with exception: ${e.message}")
+                    e.printStackTrace()
                     false
                 }
             } else if (!credential.privateKey.isNullOrEmpty()) {
@@ -73,7 +97,32 @@ class SftpClient @Inject constructor(
                 return@withContext Result.Error(Exception("Authentication failed"))
             }
             
-            val sftp = SftpClientFactory.instance().createSftpClient(session)
+            // Create SFTP client - let's accept that this will likely fail and provide better error info
+            println("SFTP: Creating SFTP client...")
+            val sftp = try {
+                println("SFTP: Attempting SFTP client creation...")
+                val factory = SftpClientFactory.instance()
+                factory.createSftpClient(session)
+            } catch (e: Exception) {
+                println("SFTP: Failed to create SFTP client: ${e.message}")
+                e.printStackTrace()
+                session.close()
+                client.stop()
+                
+                // Provide helpful error message based on the known issue
+                val errorMessage = when {
+                    e.message?.contains("Closing while await init message") == true ->
+                        "SFTP subsystem initialization failed. This usually means:\n" +
+                        "1. The server doesn't have SFTP enabled/configured\n" +
+                        "2. The server is incompatible with this SFTP client\n" +
+                        "3. Firewall/network issues preventing SFTP traffic\n" +
+                        "Please check your server's SSH/SFTP configuration."
+                    else -> "Failed to initialize SFTP: ${e.message}"
+                }
+                
+                return@withContext Result.Error(Exception(errorMessage))
+            }
+            println("SFTP: SFTP client created successfully")
             
             this@SftpClient.sshClient = client
             this@SftpClient.session = session

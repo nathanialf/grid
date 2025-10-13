@@ -15,7 +15,7 @@ fun GridThemeProvider(
     val settingsViewModel: SettingsViewModel = hiltViewModel()
     val settingsState by settingsViewModel.uiState.collectAsState()
     
-    val darkTheme = when (settingsState.themeMode) {
+    val darkTheme = when (settingsState.themeMode.uppercase()) {
         "LIGHT" -> false
         "DARK" -> true
         "SYSTEM" -> isSystemInDarkTheme()

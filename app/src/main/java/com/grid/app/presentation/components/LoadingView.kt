@@ -145,9 +145,8 @@ private fun DrawScope.drawWavyLine(
     val segments = ((endX - startX) / 1f).toInt().coerceAtLeast(50)
     val stepX = (endX - startX) / segments
     
-    // Define wavelength as a specific number of complete waves across the FULL progress bar width
-    val numberOfWaves = 10.0f  // 10 complete waves across the full width for smooth, elegant look
-    val wavelengthInPixels = size.width / numberOfWaves  // Use full width, not current progress width
+    // Use fixed wavelength in pixels for consistent appearance across all devices
+    val wavelengthInPixels = 80f  // Fixed 80px wavelength for consistent wave appearance
     
     var previousPoint: Offset? = null
     

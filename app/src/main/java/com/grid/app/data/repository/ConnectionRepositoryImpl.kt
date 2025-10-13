@@ -1,0 +1,94 @@
+package com.grid.app.data.repository
+
+import com.grid.app.data.local.PreferencesManager
+import com.grid.app.domain.model.Connection
+import com.grid.app.domain.model.Result
+import com.grid.app.domain.repository.ConnectionRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class ConnectionRepositoryImpl @Inject constructor(
+    private val preferencesManager: PreferencesManager
+) : ConnectionRepository {
+    
+    override fun getAllConnections(): Flow<List<Connection>> {
+        return preferencesManager.getConnections()
+    }
+    
+    override suspend fun getConnectionById(id: String): Connection {
+        return preferencesManager.getConnections().first()
+            .find { it.id == id } ?: throw IllegalArgumentException("Connection not found: $id")
+    }
+    
+    override suspend fun insertConnection(connection: Connection) {
+        val currentConnections = preferencesManager.getConnections().first().toMutableList()
+        currentConnections.add(connection)
+        preferencesManager.saveConnections(currentConnections)
+    }
+    
+    override suspend fun updateConnection(connection: Connection) {
+        val currentConnections = preferencesManager.getConnections().first().toMutableList()
+        val existingIndex = currentConnections.indexOfFirst { it.id == connection.id }
+        
+        if (existingIndex >= 0) {
+            currentConnections[existingIndex] = connection
+            preferencesManager.saveConnections(currentConnections)
+        } else {
+            throw IllegalArgumentException("Connection not found: ${connection.id}")
+        }
+    }
+    
+    
+    override suspend fun saveConnection(connection: Connection): Result<Unit> {
+        return try {
+            val currentConnections = preferencesManager.getConnections().first().toMutableList()
+            val existingIndex = currentConnections.indexOfFirst { it.id == connection.id }
+            
+            if (existingIndex >= 0) {
+                currentConnections[existingIndex] = connection
+            } else {
+                currentConnections.add(connection)
+            }
+            
+            preferencesManager.saveConnections(currentConnections)
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+    
+    override suspend fun deleteConnection(id: String): Result<Unit> {
+        return try {
+            val currentConnections = preferencesManager.getConnections().first().toMutableList()
+            currentConnections.removeAll { it.id == id }
+            preferencesManager.saveConnections(currentConnections)
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+    
+    override suspend fun updateLastConnected(connectionId: String): Result<Unit> {
+        return try {
+            val currentConnections = preferencesManager.getConnections().first().toMutableList()
+            val connectionIndex = currentConnections.indexOfFirst { it.id == connectionId }
+            
+            if (connectionIndex >= 0) {
+                val updatedConnection = currentConnections[connectionIndex].copy(
+                    lastConnectedAt = System.currentTimeMillis()
+                )
+                currentConnections[connectionIndex] = updatedConnection
+                preferencesManager.saveConnections(currentConnections)
+            }
+            
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+    
+}

@@ -19,6 +19,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.grid.app.domain.model.Connection
 import com.grid.app.domain.model.Protocol
 import com.grid.app.presentation.theme.GridTheme
+import com.grid.app.presentation.components.WavyCircularProgressIndicator
 
 @Composable
 fun ConnectionListScreen(
@@ -77,7 +78,10 @@ fun ConnectionListScreen(
                         .padding(paddingValues),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    WavyCircularProgressIndicator(
+                        modifier = Modifier.size(48.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
             

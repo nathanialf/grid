@@ -3,6 +3,8 @@
 package com.grid.app.presentation.screens.filebrowser
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -16,7 +18,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import android.provider.OpenableColumns
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -26,6 +30,7 @@ import com.grid.app.presentation.theme.GridTheme
 import com.grid.app.presentation.components.ErrorView
 import com.grid.app.presentation.components.EmptyDirectoryView
 import com.grid.app.presentation.components.LoadingView
+import com.grid.app.presentation.components.WavyLinearProgressIndicator
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -37,9 +42,43 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    
+    // File picker launcher
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            // Get file name from content resolver
+            val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                cursor.moveToFirst()
+                cursor.getString(nameIndex)
+            } ?: "uploaded_file"
+            
+            // Pass the URI directly to the ViewModel - it will handle the content resolution
+            viewModel.uploadFile(uri, fileName)
+        }
+    }
     
     LaunchedEffect(connectionId) {
         viewModel.initialize(connectionId)
+    }
+
+    // Handle messages and errors
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let { message ->
+            snackbarHostState.showSnackbar(message)
+            viewModel.clearMessage()
+        }
+    }
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearError()
+        }
     }
 
     BackHandler {
@@ -47,7 +86,9 @@ fun FileBrowserScreen(
             onNavigateBack()
         }
     }
+    
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -92,81 +133,86 @@ fun FileBrowserScreen(
             )
         },
         floatingActionButton = {
-            Card(
-                modifier = Modifier.padding(bottom = 16.dp),
-                shape = RoundedCornerShape(32.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            // Hide the floating toolbar when uploading to prevent covering the progress popup
+            if (!uiState.isUploading) {
+                Card(
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(32.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
-                    // New Folder - Secondary action
-                    IconButton(
-                        onClick = { viewModel.createDirectory("New Folder") },
-                        modifier = Modifier.size(56.dp)
+                    Row(
+                        modifier = Modifier.padding(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CreateNewFolder,
-                            contentDescription = "Create Folder",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    
-                    // Upload - Primary action (more prominent coloring)
-                    FilledIconButton(
-                        onClick = { /* TODO: Implement file picker */ },
-                        modifier = Modifier.size(56.dp),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Upload,
-                            contentDescription = "Upload File",
-                            modifier = Modifier.size(24.dp)
-                        )
+                        // New Folder - Secondary action
+                        IconButton(
+                            onClick = { viewModel.createDirectory("New Folder") },
+                            modifier = Modifier.size(56.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CreateNewFolder,
+                                contentDescription = "Create Folder",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        
+                        // Upload - Primary action (more prominent coloring)
+                        FilledIconButton(
+                            onClick = { filePickerLauncher.launch("*/*") },
+                            modifier = Modifier.size(56.dp),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                contentColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Upload,
+                                contentDescription = "Upload File",
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
                 }
             }
         },
         floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
-        when {
-            uiState.isLoading -> {
-                LoadingView(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                uiState.isLoading -> {
+                    LoadingView(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues),
+                        message = "Connecting to server..."
+                    )
+                }
             
-            uiState.error != null -> {
-                val error = uiState.error
-                ErrorView(
-                    error = error ?: "Unknown error",
-                    onRetry = viewModel::refresh,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
+                uiState.error != null -> {
+                    val error = uiState.error
+                    ErrorView(
+                        error = error ?: "Unknown error",
+                        onRetry = viewModel::refresh,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                    )
+                }
             
-            uiState.files.isEmpty() -> {
-                EmptyDirectoryView(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
-            }
+                uiState.files.isEmpty() -> {
+                    EmptyDirectoryView(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                    )
+                }
             
-            else -> {
-                if (uiState.viewMode == "grid") {
+                else -> {
+                    if (uiState.viewMode == "grid") {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 150.dp),
                         modifier = Modifier
@@ -203,14 +249,14 @@ fun FileBrowserScreen(
                             )
                         }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                         // Show parent directory if not at root
                         if (uiState.currentPath != "/") {
                             item {
@@ -238,33 +284,63 @@ fun FileBrowserScreen(
                             )
                         }
                     }
+                    }
+                }
+            }
+            
+            // Upload progress overlay
+            if (uiState.isUploading) {
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface
+                    ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Upload,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Uploading ${uiState.uploadFileName}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${(uiState.uploadProgress * 100).toInt()}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        WavyLinearProgressIndicator(
+                            progress = uiState.uploadProgress,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@Composable
-private fun LoadingView(
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            CircularProgressIndicator()
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Connecting to server...",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
 
 @Composable
 private fun ErrorView(

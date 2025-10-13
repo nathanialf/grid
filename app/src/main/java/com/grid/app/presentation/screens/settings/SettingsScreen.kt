@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.grid.app.presentation.theme.GridTheme
@@ -242,7 +243,8 @@ private fun SettingsDropdownItem(
         
         DropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            offset = DpOffset(x = (-48).dp, y = 0.dp)
         ) {
             options.forEach { (optionValue, label) ->
                 DropdownMenuItem(

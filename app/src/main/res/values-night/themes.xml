@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Grid" parent="android:Theme.Material.NoActionBar">
+        <!-- Basic Material dark colors -->
+        <item name="android:colorPrimary">#D0BCFF</item>
+        <item name="android:colorPrimaryDark">#9A82DB</item>
+        <item name="android:colorAccent">#CCC2DC</item>
+    </style>
+</resources>

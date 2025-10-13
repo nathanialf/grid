@@ -7,8 +7,8 @@
     <group
         android:translateX="54"
         android:translateY="54">
-        <!-- 3x3 grid of filled white squares using path data -->
-        <path android:fillColor="#FFFFFF"
+        <!-- 3x3 grid of filled squares for monochrome Material You -->
+        <path android:fillColor="#000000"
               android:pathData="M-20,-20 L-10,-20 L-10,-10 L-20,-10 Z M-7,-20 L3,-20 L3,-10 L-7,-10 Z M10,-20 L20,-20 L20,-10 L10,-10 Z M-20,-7 L-10,-7 L-10,3 L-20,3 Z M-7,-7 L3,-7 L3,3 L-7,3 Z M10,-7 L20,-7 L20,3 L10,3 Z M-20,10 L-10,10 L-10,20 L-20,20 Z M-7,10 L3,10 L3,20 L-7,20 Z M10,10 L20,10 L20,20 L10,20 Z" />
     </group>
 </vector>

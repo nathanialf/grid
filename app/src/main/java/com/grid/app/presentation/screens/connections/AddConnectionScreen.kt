@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.grid.app.domain.model.Protocol
 import com.grid.app.presentation.theme.GridTheme
+import com.grid.app.presentation.components.WavyCircularProgressIndicator
 
 @Composable
 fun AddConnectionScreen(
@@ -59,7 +60,7 @@ fun AddConnectionScreen(
                         enabled = uiState.formData.isValid() && !uiState.isSaving
                     ) {
                         if (uiState.isSaving) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                            WavyCircularProgressIndicator(modifier = Modifier.size(16.dp))
                         } else {
                             Text("Save")
                         }
@@ -126,7 +127,7 @@ fun EditConnectionScreen(
                         enabled = uiState.formData.isValid() && !uiState.isSaving
                     ) {
                         if (uiState.isSaving) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                            WavyCircularProgressIndicator(modifier = Modifier.size(16.dp))
                         } else {
                             Text("Save")
                         }
@@ -352,7 +353,7 @@ private fun ConnectionForm(
             enabled = formData.isValid() && !isTestingConnection
         ) {
             if (isTestingConnection) {
-                CircularProgressIndicator(
+                WavyCircularProgressIndicator(
                     modifier = Modifier.size(18.dp),
                     color = MaterialTheme.colorScheme.onPrimary
                 )

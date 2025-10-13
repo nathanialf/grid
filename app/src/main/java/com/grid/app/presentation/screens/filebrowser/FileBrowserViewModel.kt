@@ -1,7 +1,11 @@
 package com.grid.app.presentation.screens.filebrowser
 
+import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import java.io.File
+import java.io.FileOutputStream
 import com.grid.app.domain.model.Connection
 import com.grid.app.domain.model.RemoteFile
 import com.grid.app.domain.usecase.connection.GetConnectionUseCase
@@ -20,6 +24,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class FileBrowserViewModel @Inject constructor(
+    private val application: Application,
     private val getConnectionUseCase: GetConnectionUseCase,
     private val listFilesUseCase: ListFilesUseCase,
     private val downloadFileUseCase: DownloadFileUseCase,
@@ -117,22 +122,53 @@ class FileBrowserViewModel @Inject constructor(
         }
     }
 
-    fun uploadFile(localPath: String, remotePath: String) {
+    fun uploadFile(uri: Uri, fileName: String) {
         val connection = currentConnection ?: return
+        val currentPath = _uiState.value.currentPath
+        val remotePath = if (currentPath.endsWith("/")) {
+            "$currentPath$fileName"
+        } else {
+            "$currentPath/$fileName"
+        }
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUploading = true)
+            _uiState.value = _uiState.value.copy(
+                isUploading = true,
+                uploadProgress = 0f,
+                uploadFileName = fileName
+            )
 
             try {
-                uploadFileUseCase(connection, localPath, remotePath)
+                // Simulate progress updates
+                for (progress in 1..10) {
+                    kotlinx.coroutines.delay(200)
+                    _uiState.value = _uiState.value.copy(
+                        uploadProgress = progress / 10f
+                    )
+                }
+                
+                // Create a temporary file from the URI
+                val tempFile = createTempFileFromUri(uri, fileName)
+                if (tempFile != null) {
+                    uploadFileUseCase(connection, tempFile.absolutePath, remotePath)
+                    // Clean up the temporary file
+                    tempFile.delete()
+                } else {
+                    throw Exception("Failed to read file from URI")
+                }
+                
                 _uiState.value = _uiState.value.copy(
                     isUploading = false,
+                    uploadProgress = 0f,
+                    uploadFileName = "",
                     message = "Upload completed successfully"
                 )
                 refresh()
             } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isUploading = false,
+                    uploadProgress = 0f,
+                    uploadFileName = "",
                     error = "Upload failed: ${exception.message}"
                 )
             }
@@ -183,6 +219,29 @@ class FileBrowserViewModel @Inject constructor(
             false
         }
     }
+    
+    private fun createTempFileFromUri(uri: Uri, fileName: String): File? {
+        return try {
+            val inputStream = application.contentResolver.openInputStream(uri)
+            if (inputStream != null) {
+                val tempFile = File.createTempFile(
+                    "upload_", 
+                    "_$fileName", 
+                    application.cacheDir
+                )
+                
+                FileOutputStream(tempFile).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+                inputStream.close()
+                tempFile
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
 
 data class FileBrowserUiState(
@@ -194,6 +253,8 @@ data class FileBrowserUiState(
     val showHiddenFiles: Boolean = false,
     val isLoading: Boolean = false,
     val isUploading: Boolean = false,
+    val uploadProgress: Float = 0f,
+    val uploadFileName: String = "",
     val downloadingFiles: Set<String> = emptySet(),
     val error: String? = null,
     val message: String? = null

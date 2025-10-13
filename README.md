@@ -7,6 +7,7 @@ A modern Android application for browsing and managing files on remote servers t
 ### ✅ Working Features
 - **SMB/CIFS**: Successfully connects to Windows shares and SMB servers with full file browsing
 - **File Browser**: Complete file browser with list and grid view modes
+- **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
 - **Settings System**: Persistent settings with theme switching and view mode preferences  
 - **UI Framework**: Material 3 interface with expressive floating toolbars and navigation
 - **Architecture**: Clean Architecture implementation with Hilt DI
@@ -18,13 +19,12 @@ A modern Android application for browsing and managing files on remote servers t
 - **FTP**: Connection timeout and stability issues - essentially non-functional
 
 ### ⚠️ Known Issues
-- **File Operations**: Download/upload functionality implemented but not fully tested
+- **File Operations**: Download functionality implemented but not fully tested
 - **Connection Testing**: SMB test connections may show false negatives despite working connections
 
 ### 🚧 In Development
-- File upload/download UI with proper file picker integration
-- Enhanced file operations (create, rename, delete)
-- Transfer progress indicators
+- Enhanced file operations (rename, delete)
+- Download functionality with progress indicators
 - Additional file browser actions
 
 ## Features

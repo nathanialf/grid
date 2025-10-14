@@ -17,6 +17,7 @@ import com.grid.app.domain.usecase.file.DeleteFileUseCase
 import com.grid.app.domain.usecase.file.DownloadFileUseCase
 import com.grid.app.domain.usecase.file.ListFilesUseCase
 import com.grid.app.domain.usecase.file.RenameFileUseCase
+import com.grid.app.domain.usecase.file.RenameDirUseCase
 import com.grid.app.domain.usecase.file.UploadFileUseCase
 import com.grid.app.domain.usecase.settings.GetSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -37,6 +38,7 @@ class FileBrowserViewModel @Inject constructor(
     private val createDirectoryUseCase: CreateDirectoryUseCase,
     private val deleteFileUseCase: DeleteFileUseCase,
     private val renameFileUseCase: RenameFileUseCase,
+    private val renameDirUseCase: RenameDirUseCase,
     private val getSettingsUseCase: GetSettingsUseCase
 ) : ViewModel() {
 
@@ -263,7 +265,18 @@ class FileBrowserViewModel @Inject constructor(
                 exitSelectionMode()
                 true
             }
+            currentState.protocol == "SMB" -> {
+                // Handle SMB paths with backslashes
+                if (currentState.currentPath.isNotEmpty() && currentState.currentPath != "" && currentState.currentPath.contains("\\")) {
+                    val parentPath = currentState.currentPath.substringBeforeLast("\\")
+                    navigateToDirectory(parentPath)
+                    true
+                } else {
+                    false
+                }
+            }
             currentState.currentPath != "/" && currentState.currentPath.isNotEmpty() -> {
+                // Handle FTP/SFTP paths with forward slashes
                 val parentPath = currentState.currentPath.substringBeforeLast("/")
                     .takeIf { it.isNotEmpty() } ?: "/"
                 navigateToDirectory(parentPath)
@@ -511,20 +524,35 @@ class FileBrowserViewModel @Inject constructor(
     fun renameFile(filePath: String, newName: String) {
         val connection = currentConnection ?: return
         
+        // Find the file object to determine if it's a directory
+        val file = _uiState.value.files.find { it.path == filePath }
+        val isDirectory = file?.isDirectory ?: false
+        
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             
             try {
-                renameFileUseCase(connection, filePath, newName)
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    message = "File renamed successfully"
-                )
+                if (isDirectory) {
+                    renameDirUseCase(connection, filePath, newName)
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        message = "Directory renamed successfully"
+                    )
+                } else {
+                    renameFileUseCase(connection, filePath, newName)
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        message = "File renamed successfully"
+                    )
+                }
+                
+                // Clear selection mode after successful rename
+                exitSelectionMode()
                 refresh()
             } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    error = "Failed to rename file: ${exception.message}"
+                    error = "Failed to rename ${if (isDirectory) "directory" else "file"}: ${exception.message}"
                 )
             }
         }

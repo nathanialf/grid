@@ -44,7 +44,8 @@ fun LoadingView(
 fun WavyCircularProgressIndicator(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
-    strokeWidth: Float = 4.dp.value
+    strokeWidth: Float = 4.dp.value,
+    progress: Float? = null // Optional progress value for determinate progress
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "WavyProgress")
     
@@ -104,8 +105,18 @@ fun WavyLinearProgressIndicator(
         label = "WavePhase"
     )
     
+    // Add smooth animation for progress changes
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(
+            durationMillis = 300,
+            easing = EaseOutQuart
+        ),
+        label = "ProgressAnimation"
+    )
+    
     Canvas(modifier = modifier.height(strokeWidth.dp)) {
-        val progressWidth = size.width * progress.coerceIn(0f, 1f)
+        val progressWidth = size.width * animatedProgress
         
         // Draw background
         drawWavyLine(

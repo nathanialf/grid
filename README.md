@@ -11,10 +11,12 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Opening**: Open text and image files with built-in viewers (text editor, image viewer)
 - **File Downloads**: Download selected files to public Downloads folder with batch support
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations
-- **File Operations**: Delete, rename, and create directory functionality
+- **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling
 - **File Sorting**: Sort files by name, type, or last modified date with session persistence
 - **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
+- **Navigation**: Proper back button handling with directory-level navigation (no more jumping to root)
+- **Progress Animation**: Smooth animated progress bars for file transfer operations
 - **Settings System**: Persistent settings with theme switching and view mode preferences  
 - **UI Framework**: Material 3 interface with expressive floating toolbars and navigation
 - **Architecture**: Clean Architecture implementation with Hilt DI

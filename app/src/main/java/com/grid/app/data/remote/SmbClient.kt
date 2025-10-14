@@ -188,24 +188,49 @@ class SmbClient @Inject constructor() : NetworkClient {
         try {
             val share = diskShare ?: return@withContext Result.Error(Exception("Not connected"))
             
-            // SMB doesn't have a direct rename operation, so we need to use move
-            val file = share.openFile(
-                oldPath,
-                EnumSet.of(AccessMask.DELETE),
-                null,
-                SMB2ShareAccess.ALL,
-                SMB2CreateDisposition.FILE_OPEN,
-                null
-            )
+            // Check if it's a directory first
+            val fileInfo = share.getFileInformation(oldPath)
+            val isDirectory = fileInfo.standardInformation.isDirectory
             
-            try {
-                file.rename(newPath, false)
-            } finally {
-                file.close()
+            println("SMB: Renaming ${if (isDirectory) "directory" else "file"} from '$oldPath' to '$newPath'")
+            
+            if (isDirectory) {
+                // For directories, use FILE_OPEN_IF and DIRECTORY_FILE attributes
+                val directory = share.openDirectory(
+                    oldPath,
+                    EnumSet.of(AccessMask.DELETE),
+                    null,
+                    SMB2ShareAccess.ALL,
+                    SMB2CreateDisposition.FILE_OPEN,
+                    null
+                )
+                
+                try {
+                    directory.rename(newPath, false)
+                } finally {
+                    directory.close()
+                }
+            } else {
+                // For files, use the original logic
+                val file = share.openFile(
+                    oldPath,
+                    EnumSet.of(AccessMask.DELETE),
+                    null,
+                    SMB2ShareAccess.ALL,
+                    SMB2CreateDisposition.FILE_OPEN,
+                    null
+                )
+                
+                try {
+                    file.rename(newPath, false)
+                } finally {
+                    file.close()
+                }
             }
             
             Result.Success(Unit)
         } catch (e: Exception) {
+            println("SMB: Rename failed: ${e.message}")
             Result.Error(e)
         }
     }

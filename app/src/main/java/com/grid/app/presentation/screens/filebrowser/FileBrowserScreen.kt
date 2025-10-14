@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -206,14 +207,6 @@ fun FileBrowserScreen(
                             )
                         }
                     }
-                    
-                    // Refresh button
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh"
-                        )
-                    }
                 }
             )
         },
@@ -347,13 +340,15 @@ fun FileBrowserScreen(
         },
         floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
-        Box(modifier = Modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = { viewModel.refresh() },
+            modifier = Modifier.fillMaxSize().padding(paddingValues)
+        ) {
             when {
                 uiState.isLoading -> {
                     LoadingView(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
+                        modifier = Modifier.fillMaxSize(),
                         message = "Connecting to server..."
                     )
                 }
@@ -363,17 +358,13 @@ fun FileBrowserScreen(
                     ErrorView(
                         error = error ?: "Unknown error",
                         onRetry = viewModel::refresh,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             
                 uiState.files.isEmpty() -> {
                     EmptyDirectoryView(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             
@@ -381,20 +372,28 @@ fun FileBrowserScreen(
                     if (uiState.viewMode == "grid") {
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 150.dp),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues),
+                        modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Show parent directory if not at root
-                        if (uiState.currentPath != "/") {
+                        if (uiState.currentPath != "/" && uiState.currentPath.isNotEmpty()) {
                             item {
                                 ParentDirectoryGridItem(
                                     onNavigateUp = {
-                                        val parentPath = uiState.currentPath.substringBeforeLast("/")
-                                            .takeIf { it.isNotEmpty() } ?: "/"
+                                        val parentPath = if (uiState.protocol == "SMB") {
+                                            // Handle SMB paths with backslashes
+                                            if (uiState.currentPath.contains("\\")) {
+                                                uiState.currentPath.substringBeforeLast("\\")
+                                            } else {
+                                                "" // Go to share root if no backslashes
+                                            }
+                                        } else {
+                                            // Handle FTP/SFTP paths with forward slashes
+                                            uiState.currentPath.substringBeforeLast("/")
+                                                .takeIf { it.isNotEmpty() } ?: "/"
+                                        }
                                         viewModel.navigateToDirectory(parentPath)
                                     }
                                 )
@@ -420,19 +419,27 @@ fun FileBrowserScreen(
                     }
                     } else {
                         LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(paddingValues),
+                            modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                         // Show parent directory if not at root
-                        if (uiState.currentPath != "/") {
+                        if (uiState.currentPath != "/" && uiState.currentPath.isNotEmpty()) {
                             item {
                                 ParentDirectoryItem(
                                     onNavigateUp = {
-                                        val parentPath = uiState.currentPath.substringBeforeLast("/")
-                                            .takeIf { it.isNotEmpty() } ?: "/"
+                                        val parentPath = if (uiState.protocol == "SMB") {
+                                            // Handle SMB paths with backslashes
+                                            if (uiState.currentPath.contains("\\")) {
+                                                uiState.currentPath.substringBeforeLast("\\")
+                                            } else {
+                                                "" // Go to share root if no backslashes
+                                            }
+                                        } else {
+                                            // Handle FTP/SFTP paths with forward slashes
+                                            uiState.currentPath.substringBeforeLast("/")
+                                                .takeIf { it.isNotEmpty() } ?: "/"
+                                        }
                                         viewModel.navigateToDirectory(parentPath)
                                     }
                                 )

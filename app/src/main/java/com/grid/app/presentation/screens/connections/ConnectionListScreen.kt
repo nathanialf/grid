@@ -5,6 +5,7 @@ package com.grid.app.presentation.screens.connections
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +16,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.text.style.TextAlign
+import android.content.ContextWrapper
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.grid.app.domain.model.Connection
 import com.grid.app.domain.model.Protocol
@@ -30,6 +35,30 @@ fun ConnectionListScreen(
     viewModel: ConnectionListViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    
+    // Cast context to FragmentActivity (MainActivity extends FragmentActivity)
+    val activity = context as? FragmentActivity
+    
+    // Auto-trigger biometric authentication when required
+    LaunchedEffect(uiState.requiresBiometric, uiState.isBiometricAuthenticated) {
+        println("Grid: LaunchedEffect triggered")
+        println("Grid: requiresBiometric = ${uiState.requiresBiometric}")
+        println("Grid: isBiometricAuthenticated = ${uiState.isBiometricAuthenticated}")
+        println("Grid: context type = ${context::class.java.name}")
+        println("Grid: activity found = ${activity != null}")
+        println("Grid: biometricError = ${uiState.biometricError}")
+        
+        if (uiState.requiresBiometric && !uiState.isBiometricAuthenticated && activity != null) {
+            println("Grid: Conditions met, starting authentication after delay")
+            // Add a small delay to ensure the UI is ready
+            kotlinx.coroutines.delay(500)
+            println("Grid: Calling authenticateWithBiometric")
+            viewModel.authenticateWithBiometric(activity)
+        } else {
+            println("Grid: Conditions not met for auto-authentication")
+        }
+    }
     
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -46,31 +75,52 @@ fun ConnectionListScreen(
                     )
                 },
                 actions = {
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings"
-                        )
+                    // Only show settings when not requiring authentication or already authenticated
+                    if (!uiState.requiresBiometric || uiState.isBiometricAuthenticated) {
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings"
+                            )
+                        }
                     }
                 }
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNavigateToAddConnection,
-                modifier = Modifier.padding(horizontal = 16.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add Connection")
+            // Only show add button when not requiring authentication or already authenticated
+            if (!uiState.requiresBiometric || uiState.isBiometricAuthenticated) {
+                ExtendedFloatingActionButton(
+                    onClick = onNavigateToAddConnection,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add Connection")
+                }
             }
         },
         floatingActionButtonPosition = FabPosition.Center
     ) { paddingValues ->
         when {
+            uiState.requiresBiometric && !uiState.isBiometricAuthenticated -> {
+                BiometricAuthenticationView(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    onAuthenticate = { 
+                        activity?.let { fragmentActivity ->
+                            viewModel.authenticateWithBiometric(fragmentActivity)
+                        }
+                    },
+                    biometricError = uiState.biometricError,
+                    onClearError = { viewModel.clearBiometricError() }
+                )
+            }
+            
             uiState.isLoading -> {
                 Box(
                     modifier = Modifier
@@ -102,12 +152,18 @@ fun ConnectionListScreen(
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(uiState.connections) { connection ->
+                    itemsIndexed(uiState.connections) { index, connection ->
                         ConnectionCard(
                             connection = connection,
                             onConnect = { onNavigateToFileBrowser(connection.id) },
                             onEdit = { onNavigateToEditConnection(connection.id) },
-                            onDelete = { viewModel.deleteConnection(connection.id) }
+                            onDelete = { viewModel.deleteConnection(connection.id) },
+                            onMoveUp = if (index > 0) { 
+                                { viewModel.reorderConnections(index, index - 1) } 
+                            } else null,
+                            onMoveDown = if (index < uiState.connections.size - 1) { 
+                                { viewModel.reorderConnections(index, index + 1) } 
+                            } else null
                         )
                     }
                 }
@@ -194,7 +250,9 @@ private fun ConnectionCard(
     connection: Connection,
     onConnect: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onMoveUp: (() -> Unit)? = null,
+    onMoveDown: (() -> Unit)? = null
 ) {
     var showDropdownMenu by remember { mutableStateOf(false) }
     
@@ -263,6 +321,33 @@ private fun ConnectionCard(
                                 Icon(Icons.Default.Edit, contentDescription = null)
                             }
                         )
+                        
+                        onMoveUp?.let { moveUp ->
+                            DropdownMenuItem(
+                                text = { Text("Move Up") },
+                                onClick = {
+                                    showDropdownMenu = false
+                                    moveUp()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = null)
+                                }
+                            )
+                        }
+                        
+                        onMoveDown?.let { moveDown ->
+                            DropdownMenuItem(
+                                text = { Text("Move Down") },
+                                onClick = {
+                                    showDropdownMenu = false
+                                    moveDown()
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+                                }
+                            )
+                        }
+                        
                         DropdownMenuItem(
                             text = { Text("Delete") },
                             onClick = {
@@ -292,6 +377,93 @@ private fun ConnectionCard(
                         onClick = { },
                         label = { Text("Last used") }
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BiometricAuthenticationView(
+    modifier: Modifier = Modifier,
+    onAuthenticate: () -> Unit,
+    biometricError: String?,
+    onClearError: () -> Unit
+) {
+    Column(
+        modifier = modifier.padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Fingerprint,
+            contentDescription = "Biometric Authentication",
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Authentication Required",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "Use your fingerprint or face to access your connections",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Button(onClick = {
+            println("Grid: Manual authenticate button clicked")
+            onAuthenticate()
+        }) {
+            Icon(
+                imageVector = Icons.Default.Fingerprint,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Authenticate")
+        }
+        
+        biometricError?.let { error ->
+            Spacer(modifier = Modifier.height(16.dp))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Error,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onClearError) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Clear error",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }

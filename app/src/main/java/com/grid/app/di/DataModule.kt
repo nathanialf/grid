@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.grid.app.data.local.EncryptionManager
 import com.grid.app.data.local.PreferencesManager
+import com.grid.app.data.local.BiometricManager
 import com.grid.app.data.remote.NetworkClientFactory
 import com.grid.app.data.remote.FtpClient
 import com.grid.app.data.remote.SftpClient
@@ -24,6 +25,7 @@ import com.grid.app.domain.usecase.connection.CreateConnectionUseCase
 import com.grid.app.domain.usecase.connection.UpdateConnectionUseCase
 import com.grid.app.domain.usecase.connection.GetConnectionUseCase
 import com.grid.app.domain.usecase.connection.TestConnectionUseCase
+import com.grid.app.domain.usecase.connection.ReorderConnectionsUseCase
 import com.grid.app.domain.usecase.settings.GetSettingsUseCase
 import com.grid.app.domain.usecase.settings.UpdateSettingsUseCase
 import dagger.Binds
@@ -181,5 +183,19 @@ object UseCaseModule {
         settingsRepository: SettingsRepository
     ): UpdateSettingsUseCase {
         return UpdateSettingsUseCase(settingsRepository)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideReorderConnectionsUseCase(
+        connectionRepository: ConnectionRepository
+    ): ReorderConnectionsUseCase {
+        return ReorderConnectionsUseCase(connectionRepository)
+    }
+    
+    @Provides
+    @Singleton
+    fun provideBiometricManager(@ApplicationContext context: Context): BiometricManager {
+        return BiometricManager(context)
     }
 }

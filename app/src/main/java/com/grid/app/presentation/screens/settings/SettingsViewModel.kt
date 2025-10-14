@@ -6,6 +6,8 @@ import com.grid.app.domain.usecase.settings.GetSettingsUseCase
 import com.grid.app.domain.usecase.settings.UpdateSettingsUseCase
 import com.grid.app.domain.model.ViewMode
 import com.grid.app.domain.model.ThemeMode
+import com.grid.app.data.local.BiometricManager
+import androidx.fragment.app.FragmentActivity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +19,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val getSettingsUseCase: GetSettingsUseCase,
-    private val updateSettingsUseCase: UpdateSettingsUseCase
+    private val updateSettingsUseCase: UpdateSettingsUseCase,
+    private val biometricManager: BiometricManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -54,10 +57,40 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun updateBiometricEnabled(enabled: Boolean) {
+    fun updateBiometricEnabled(enabled: Boolean, activity: FragmentActivity? = null) {
         println("SettingsViewModel: Updating biometric enabled to: $enabled")
-        updateSetting { copy(biometricEnabled = enabled) }
-        _uiState.value = _uiState.value.copy(biometricEnabled = enabled)
+        
+        if (enabled && activity != null && biometricManager.isBiometricAvailable()) {
+            // Require authentication before enabling biometrics
+            viewModelScope.launch {
+                try {
+                    val result = biometricManager.authenticate(activity)
+                    result.fold(
+                        onSuccess = {
+                            // Authentication successful, enable biometrics
+                            updateSetting { copy(biometricEnabled = true) }
+                            _uiState.value = _uiState.value.copy(biometricEnabled = true)
+                        },
+                        onFailure = { exception ->
+                            // Authentication failed, don't enable biometrics
+                            println("SettingsViewModel: Biometric authentication failed: ${exception.message}")
+                            _uiState.value = _uiState.value.copy(
+                                error = "Biometric authentication failed: ${exception.message}"
+                            )
+                        }
+                    )
+                } catch (e: Exception) {
+                    println("SettingsViewModel: Biometric authentication error: ${e.message}")
+                    _uiState.value = _uiState.value.copy(
+                        error = "Biometric authentication error: ${e.message}"
+                    )
+                }
+            }
+        } else {
+            // Disabling biometrics or no activity provided, update directly
+            updateSetting { copy(biometricEnabled = enabled) }
+            _uiState.value = _uiState.value.copy(biometricEnabled = enabled)
+        }
     }
 
     fun updateShowHiddenFiles(show: Boolean) {

@@ -16,7 +16,9 @@ class ConnectionRepositoryImpl @Inject constructor(
 ) : ConnectionRepository {
     
     override fun getAllConnections(): Flow<List<Connection>> {
-        return preferencesManager.getConnections()
+        return preferencesManager.getConnections().map { connections ->
+            connections.sortedBy { it.order }
+        }
     }
     
     override suspend fun getConnectionById(id: String): Connection {
@@ -81,6 +83,23 @@ class ConnectionRepositoryImpl @Inject constructor(
                 val updatedConnection = currentConnections[connectionIndex].copy(
                     lastConnectedAt = System.currentTimeMillis()
                 )
+                currentConnections[connectionIndex] = updatedConnection
+                preferencesManager.saveConnections(currentConnections)
+            }
+            
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+    
+    override suspend fun updateConnectionOrder(connectionId: String, newOrder: Int): Result<Unit> {
+        return try {
+            val currentConnections = preferencesManager.getConnections().first().toMutableList()
+            val connectionIndex = currentConnections.indexOfFirst { it.id == connectionId }
+            
+            if (connectionIndex >= 0) {
+                val updatedConnection = currentConnections[connectionIndex].copy(order = newOrder)
                 currentConnections[connectionIndex] = updatedConnection
                 preferencesManager.saveConnections(currentConnections)
             }

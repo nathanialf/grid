@@ -17,6 +17,9 @@ A modern Android application for browsing and managing files on remote servers t
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
 - **Navigation**: Proper back button handling with directory-level navigation (no more jumping to root)
 - **Progress Animation**: Smooth animated progress bars for file transfer operations
+- **Pull-to-Refresh**: Material 3 pull-to-refresh functionality for refreshing file listings
+- **Biometric Authentication**: Secure biometric unlock for connections with auto-authentication
+- **Connection Reordering**: Move up/down buttons in connection menu for custom ordering
 - **Settings System**: Persistent settings with theme switching and view mode preferences  
 - **UI Framework**: Material 3 interface with expressive floating toolbars and navigation
 - **Architecture**: Clean Architecture implementation with Hilt DI

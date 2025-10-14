@@ -15,6 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.grid.app.presentation.theme.GridTheme
 
@@ -24,6 +26,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -58,7 +61,13 @@ fun SettingsScreen(
                     title = "Biometric Authentication",
                     subtitle = "Use fingerprint or face unlock for app access",
                     checked = uiState.biometricEnabled,
-                    onCheckedChange = viewModel::updateBiometricEnabled,
+                    onCheckedChange = { enabled ->
+                        if (context is FragmentActivity) {
+                            viewModel.updateBiometricEnabled(enabled, context)
+                        } else {
+                            viewModel.updateBiometricEnabled(enabled)
+                        }
+                    },
                     icon = Icons.Default.Fingerprint
                 )
             }

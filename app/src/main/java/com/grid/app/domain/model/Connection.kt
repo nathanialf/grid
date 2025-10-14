@@ -12,7 +12,8 @@ data class Connection(
     val credentialId: String,
     val shareName: String? = null, // For SMB connections
     val createdAt: Long = System.currentTimeMillis(),
-    val lastConnectedAt: Long? = null
+    val lastConnectedAt: Long? = null,
+    val order: Int = 0 // For custom ordering
 ) {
     val effectivePort: Int
         get() = port ?: protocol.defaultPort

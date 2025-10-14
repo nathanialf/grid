@@ -12,4 +12,5 @@ interface ConnectionRepository {
     suspend fun deleteConnection(id: String): Result<Unit>
     suspend fun saveConnection(connection: Connection): Result<Unit>
     suspend fun updateLastConnected(connectionId: String): Result<Unit>
+    suspend fun updateConnectionOrder(connectionId: String, newOrder: Int): Result<Unit>
 }

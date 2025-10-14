@@ -8,24 +8,28 @@ A modern Android application for browsing and managing files on remote servers t
 - **SMB/CIFS**: Successfully connects to Windows shares and SMB servers with full file browsing
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
+- **Multi-Select**: File selection mode with multi-select capabilities and batch operations
+- **File Operations**: Delete, rename, and create directory functionality
+- **File Sorting**: Sort files by name, type, or last modified date
+- **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
 - **Settings System**: Persistent settings with theme switching and view mode preferences  
 - **UI Framework**: Material 3 interface with expressive floating toolbars and navigation
 - **Architecture**: Clean Architecture implementation with Hilt DI
 - **Secure Storage**: Android Keystore encryption for credentials
 - **Connection Management**: Add, edit, test, and manage server connections
-
-### ❌ Broken/Non-Functional
-- **SFTP**: Connection failures with cryptography provider issues - completely broken
-- **FTP**: Connection timeout and stability issues - essentially non-functional
+- **About Section**: Developer information and settings
 
 ### ⚠️ Known Issues
+- **SFTP**: Connection failures with cryptography provider issues - not currently functional
+- **FTP**: Connection timeout and stability issues - not currently functional
 - **File Operations**: Download functionality implemented but not fully tested
 - **Connection Testing**: SMB test connections may show false negatives despite working connections
+- **Long Press**: Long press to enter selection mode not currently working (gesture detection issues)
 
 ### 🚧 In Development
-- Enhanced file operations (rename, delete)
-- Download functionality with progress indicators
-- Additional file browser actions
+- SFTP and FTP protocol stability improvements
+- Long press gesture improvements
+- Enhanced download functionality with progress indicators
 
 ## Features
 

@@ -14,7 +14,9 @@ interface FileRepository {
     suspend fun createDirectory(connectionId: String, path: String): Result<Unit>
     suspend fun createDirectory(connection: Connection, directoryPath: String)
     suspend fun deleteFile(connectionId: String, path: String): Result<Unit>
+    suspend fun deleteFile(connection: Connection, filePath: String)
     suspend fun renameFile(connectionId: String, oldPath: String, newPath: String): Result<Unit>
+    suspend fun renameFile(connection: Connection, oldPath: String, newPath: String)
     
     suspend fun downloadFile(
         connectionId: String,

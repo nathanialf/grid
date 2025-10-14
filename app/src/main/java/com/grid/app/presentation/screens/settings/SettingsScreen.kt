@@ -102,17 +102,17 @@ fun SettingsScreen(
             // About Section
             SettingsSection(title = "About") {
                 SettingsClickableItem(
+                    title = "Developed by Nathanial Fine",
+                    subtitle = "defnf.com",
+                    icon = Icons.Default.Person,
+                    onClick = { /* TODO: Open website */ }
+                )
+                
+                SettingsClickableItem(
                     title = "Version",
                     subtitle = "1.0.0",
                     icon = Icons.Default.Info,
                     onClick = { /* TODO: Show version info */ }
-                )
-                
-                SettingsClickableItem(
-                    title = "Open Source Licenses",
-                    subtitle = "View third-party software licenses",
-                    icon = Icons.Default.Article,
-                    onClick = { /* TODO: Show licenses */ }
                 )
             }
         }

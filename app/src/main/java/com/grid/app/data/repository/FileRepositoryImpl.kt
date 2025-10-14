@@ -119,11 +119,61 @@ class FileRepositoryImpl @Inject constructor(
         return client.deleteFile(path)
     }
     
+    override suspend fun deleteFile(connection: Connection, filePath: String) {
+        val credential = credentialRepository.getCredentialById(connection.credentialId)
+        val client = networkClientFactory.createClient(connection.protocol)
+        
+        when (val connectResult = client.connect(connection, credential)) {
+            is Result.Success -> {
+                when (val deleteResult = client.deleteFile(filePath)) {
+                    is Result.Success -> {
+                        client.disconnect()
+                    }
+                    is Result.Error -> {
+                        client.disconnect()
+                        throw deleteResult.exception
+                    }
+                    is Result.Loading -> {
+                        client.disconnect()
+                        throw Exception("Unexpected loading state")
+                    }
+                }
+            }
+            is Result.Error -> throw connectResult.exception
+            is Result.Loading -> throw Exception("Unexpected loading state")
+        }
+    }
+    
     override suspend fun renameFile(connectionId: String, oldPath: String, newPath: String): Result<Unit> {
         val client = activeClients[connectionId]
             ?: return Result.Error(Exception("Not connected"))
         
         return client.renameFile(oldPath, newPath)
+    }
+    
+    override suspend fun renameFile(connection: Connection, oldPath: String, newPath: String) {
+        val credential = credentialRepository.getCredentialById(connection.credentialId)
+        val client = networkClientFactory.createClient(connection.protocol)
+        
+        when (val connectResult = client.connect(connection, credential)) {
+            is Result.Success -> {
+                when (val renameResult = client.renameFile(oldPath, newPath)) {
+                    is Result.Success -> {
+                        client.disconnect()
+                    }
+                    is Result.Error -> {
+                        client.disconnect()
+                        throw renameResult.exception
+                    }
+                    is Result.Loading -> {
+                        client.disconnect()
+                        throw Exception("Unexpected loading state")
+                    }
+                }
+            }
+            is Result.Error -> throw connectResult.exception
+            is Result.Loading -> throw Exception("Unexpected loading state")
+        }
     }
     
     override suspend fun downloadFile(

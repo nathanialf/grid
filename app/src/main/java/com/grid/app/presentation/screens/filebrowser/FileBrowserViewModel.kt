@@ -453,13 +453,24 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     fun deleteSelectedFiles() {
+        val selectedFiles = _uiState.value.selectedFiles
+        if (selectedFiles.isEmpty()) return
+        
+        // Show confirmation dialog
+        _uiState.value = _uiState.value.copy(showDeleteConfirmation = true)
+    }
+    
+    fun confirmDeleteSelectedFiles() {
         val connection = currentConnection ?: return
         val selectedFiles = _uiState.value.selectedFiles
         
         if (selectedFiles.isEmpty()) return
         
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(
+                isLoading = true,
+                showDeleteConfirmation = false
+            )
             
             try {
                 var deletedCount = 0
@@ -497,6 +508,10 @@ class FileBrowserViewModel @Inject constructor(
                 )
             }
         }
+    }
+    
+    fun dismissDeleteConfirmation() {
+        _uiState.value = _uiState.value.copy(showDeleteConfirmation = false)
     }
 
     fun deleteFile(filePath: String) {
@@ -603,6 +618,7 @@ data class FileBrowserUiState(
     val downloadingFiles: Set<String> = emptySet(),
     val isSelectionMode: Boolean = false,
     val selectedFiles: Set<String> = emptySet(),
+    val showDeleteConfirmation: Boolean = false,
     val error: String? = null,
     val message: String? = null
 )

@@ -49,7 +49,22 @@ class ConnectionListViewModel @Inject constructor(
     }
 
     fun deleteConnection(connectionId: String) {
+        // Show confirmation dialog
+        _uiState.value = _uiState.value.copy(
+            showDeleteConfirmation = true,
+            connectionToDelete = connectionId
+        )
+    }
+    
+    fun confirmDeleteConnection() {
+        val connectionId = _uiState.value.connectionToDelete ?: return
+        
         viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                showDeleteConfirmation = false,
+                connectionToDelete = null
+            )
+            
             when (val result = deleteConnectionUseCase(connectionId)) {
                 is Result.Success -> loadConnections()
                 is Result.Error -> {
@@ -60,6 +75,13 @@ class ConnectionListViewModel @Inject constructor(
                 is Result.Loading -> { /* Handle loading state if needed */ }
             }
         }
+    }
+    
+    fun dismissDeleteConfirmation() {
+        _uiState.value = _uiState.value.copy(
+            showDeleteConfirmation = false,
+            connectionToDelete = null
+        )
     }
 
     fun refresh() {
@@ -74,5 +96,7 @@ class ConnectionListViewModel @Inject constructor(
 data class ConnectionListUiState(
     val connections: List<Connection> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val showDeleteConfirmation: Boolean = false,
+    val connectionToDelete: String? = null
 )

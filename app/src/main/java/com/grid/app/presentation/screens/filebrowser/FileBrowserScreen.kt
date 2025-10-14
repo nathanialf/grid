@@ -558,6 +558,36 @@ fun FileBrowserScreen(
             }
         )
     }
+    
+    // Delete confirmation dialog
+    if (uiState.showDeleteConfirmation) {
+        val selectedCount = uiState.selectedFiles.size
+        val dialogText = if (selectedCount == 1) {
+            "Are you sure you want to delete this item?"
+        } else {
+            "Are you sure you want to delete $selectedCount items?"
+        }
+        
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteConfirmation() },
+            title = { Text("Confirm Delete") },
+            text = { Text(dialogText) },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmDeleteSelectedFiles() }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.dismissDeleteConfirmation() }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 private fun formatPath(path: String, connectionName: String, protocol: String, shareName: String?): String {

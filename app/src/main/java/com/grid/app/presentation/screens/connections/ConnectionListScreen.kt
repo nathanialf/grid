@@ -114,6 +114,32 @@ fun ConnectionListScreen(
             }
         }
     }
+    
+    // Delete confirmation dialog
+    if (uiState.showDeleteConfirmation) {
+        val connectionToDelete = uiState.connections.find { it.id == uiState.connectionToDelete }
+        val connectionName = connectionToDelete?.name ?: "this connection"
+        
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissDeleteConfirmation() },
+            title = { Text("Delete Connection") },
+            text = { Text("Are you sure you want to delete \"$connectionName\"? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.confirmDeleteConnection() }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { viewModel.dismissDeleteConfirmation() }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable

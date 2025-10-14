@@ -8,9 +8,12 @@ A modern Android application for browsing and managing files on remote servers t
 - **SMB/CIFS**: Successfully connects to Windows shares and SMB servers with full file browsing
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
+- **File Opening**: Open text and image files with built-in viewers (text editor, image viewer)
+- **File Downloads**: Download selected files to public Downloads folder with batch support
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations
 - **File Operations**: Delete, rename, and create directory functionality
-- **File Sorting**: Sort files by name, type, or last modified date
+- **File Sorting**: Sort files by name, type, or last modified date with session persistence
+- **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
 - **Settings System**: Persistent settings with theme switching and view mode preferences  
 - **UI Framework**: Material 3 interface with expressive floating toolbars and navigation
@@ -22,14 +25,14 @@ A modern Android application for browsing and managing files on remote servers t
 ### ⚠️ Known Issues
 - **SFTP**: Connection failures with cryptography provider issues - not currently functional
 - **FTP**: Connection timeout and stability issues - not currently functional
-- **File Operations**: Download functionality implemented but not fully tested
 - **Connection Testing**: SMB test connections may show false negatives despite working connections
-- **Long Press**: Long press to enter selection mode not currently working (gesture detection issues)
+- **Directory Downloads**: Directory downloads are skipped (files only for now)
 
 ### 🚧 In Development
 - SFTP and FTP protocol stability improvements
-- Long press gesture improvements
-- Enhanced download functionality with progress indicators
+- Directory download support with recursive file extraction
+- Additional file type viewers (PDF, video, audio)
+- File search and filtering capabilities
 
 ## Features
 

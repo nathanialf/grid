@@ -266,8 +266,17 @@ class FileRepositoryImpl @Inject constructor(
         when (val connectResult = client.connect(connection, credential)) {
             is Result.Success -> {
                 val localFile = File(localPath)
-                client.downloadFile(file.path, FileOutputStream(localFile))
-                    .collect { /* Collect the flow but don't return it since method signature is Unit */ }
+                // Ensure parent directory exists
+                localFile.parentFile?.mkdirs()
+                
+                // Use try-with-resources to ensure FileOutputStream is closed
+                FileOutputStream(localFile).use { outputStream ->
+                    client.downloadFile(file.path, outputStream)
+                        .collect { /* Collect the flow but don't return it since method signature is Unit */ }
+                }
+                
+                // Disconnect after successful download
+                client.disconnect()
             }
             is Result.Error -> throw connectResult.exception
             is Result.Loading -> throw Exception("Unexpected loading state")

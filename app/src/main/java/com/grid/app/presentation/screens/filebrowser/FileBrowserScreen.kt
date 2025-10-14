@@ -22,6 +22,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import android.provider.OpenableColumns
 import androidx.compose.ui.text.style.TextAlign
@@ -38,6 +40,7 @@ import com.grid.app.presentation.components.WavyLinearProgressIndicator
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.content.Intent
 
 @Composable
 fun FileBrowserScreen(
@@ -149,14 +152,6 @@ fun FileBrowserScreen(
                     }
                 },
                 actions = {
-                    // Refresh button
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Refresh"
-                        )
-                    }
-                    
                     // Sort dropdown
                     var expanded by remember { mutableStateOf(false) }
                     
@@ -211,6 +206,14 @@ fun FileBrowserScreen(
                             )
                         }
                     }
+                    
+                    // Refresh button
+                    IconButton(onClick = { viewModel.refresh() }) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh"
+                        )
+                    }
                 }
             )
         },
@@ -263,6 +266,19 @@ fun FileBrowserScreen(
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
+                            }
+                            
+                            // Download selected files
+                            IconButton(
+                                onClick = { viewModel.downloadSelectedFiles() },
+                                modifier = Modifier.size(56.dp),
+                                enabled = uiState.selectedFiles.isNotEmpty()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Download,
+                                    contentDescription = "Download Selected",
+                                    modifier = Modifier.size(24.dp)
+                                )
                             }
                             
                             // Delete selected files
@@ -392,13 +408,13 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        // TODO: Implement download with proper local path
-                                        viewModel.downloadFile(file, "/tmp/${file.name}")
+                                        handleFileOpen(context, viewModel, file)
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
                                 isSelected = uiState.selectedFiles.contains(file.path),
-                                onSelectionToggle = { viewModel.toggleFileSelection(file.path) }
+                                onSelectionToggle = { viewModel.toggleFileSelection(file.path) },
+                                onLongPress = { viewModel.enterSelectionModeWithFile(file.path) }
                             )
                         }
                     }
@@ -430,8 +446,7 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        // TODO: Implement download with proper local path
-                                        viewModel.downloadFile(file, "/tmp/${file.name}")
+                                        handleFileOpen(context, viewModel, file)
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
@@ -700,6 +715,7 @@ private fun FileItem(
     onLongPress: () -> Unit = {}
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
+    val hapticFeedback = LocalHapticFeedback.current
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -725,6 +741,7 @@ private fun FileItem(
                         },
                         onLongPress = {
                             if (!isSelectionMode) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onLongPress()
                             }
                         }
@@ -734,6 +751,7 @@ private fun FileItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(72.dp)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -811,6 +829,58 @@ private fun formatFileSize(bytes: Long): String {
     return "%.1f %s".format(size, units[unitIndex])
 }
 
+private enum class FileType {
+    TEXT, IMAGE, UNKNOWN
+}
+
+private fun getFileType(fileName: String): FileType {
+    val extension = fileName.substringAfterLast('.', "").lowercase()
+    
+    return when {
+        // Image extensions
+        extension in setOf("jpg", "jpeg", "png", "gif", "bmp", "webp", "svg") -> FileType.IMAGE
+        
+        // Text extensions
+        extension in setOf(
+            "txt", "md", "json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
+            "cpp", "c", "h", "cs", "php", "rb", "go", "rs", "swift", "yml", "yaml", "toml",
+            "properties", "ini", "cfg", "conf", "log", "csv", "sql", "sh", "bat", "dockerfile",
+            "gitignore", "gradle", "makefile", "readme"
+        ) -> FileType.TEXT
+        
+        // Files without extension or unknown extensions - assume text
+        extension.isEmpty() || extension == fileName.lowercase() -> FileType.TEXT
+        
+        else -> FileType.TEXT // Default to text for unknown extensions
+    }
+}
+
+private fun handleFileOpen(
+    context: android.content.Context,
+    viewModel: FileBrowserViewModel,
+    file: RemoteFile
+) {
+    val fileType = getFileType(file.name)
+    
+    when (fileType) {
+        FileType.TEXT, FileType.IMAGE -> {
+            viewModel.openFile(file) { tempFile ->
+                // Start FileViewerActivity with the downloaded file
+                val intent = Intent(context, com.grid.app.presentation.fileviewer.FileViewerActivity::class.java).apply {
+                    putExtra("file_path", tempFile.absolutePath)
+                    putExtra("file_name", file.name)
+                    putExtra("file_type", fileType.name)
+                }
+                context.startActivity(intent)
+            }
+        }
+        FileType.UNKNOWN -> {
+            // Fallback to download for unknown types
+            viewModel.downloadFile(file, "/tmp/${file.name}")
+        }
+    }
+}
+
 @Composable
 private fun ParentDirectoryGridItem(
     onNavigateUp: () -> Unit
@@ -852,10 +922,11 @@ private fun FileGridItem(
     onClick: () -> Unit,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
-    onSelectionToggle: () -> Unit = {}
+    onSelectionToggle: () -> Unit = {},
+    onLongPress: () -> Unit = {}
 ) {
+    val hapticFeedback = LocalHapticFeedback.current
     Card(
-        onClick = if (isSelectionMode) onSelectionToggle else onClick,
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1.5f),
@@ -867,7 +938,27 @@ private fun FileGridItem(
             CardDefaults.cardColors()
         }
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(isSelectionMode) {
+                    detectTapGestures(
+                        onTap = {
+                            if (isSelectionMode) {
+                                onSelectionToggle()
+                            } else {
+                                onClick()
+                            }
+                        },
+                        onLongPress = {
+                            if (!isSelectionMode) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onLongPress()
+                            }
+                        }
+                    )
+                }
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()

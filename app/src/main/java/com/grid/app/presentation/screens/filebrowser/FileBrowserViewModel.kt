@@ -6,6 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.io.File
 import java.io.FileOutputStream
+import android.content.Intent
+import android.webkit.MimeTypeMap
+import android.os.Environment
 import com.grid.app.domain.model.Connection
 import com.grid.app.domain.model.RemoteFile
 import com.grid.app.domain.usecase.connection.GetConnectionUseCase
@@ -124,6 +127,44 @@ class FileBrowserViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles - file.path,
                     error = "Failed to download ${file.name}: ${exception.message}"
+                )
+            }
+        }
+    }
+
+    fun openFile(file: RemoteFile, onFileReady: (File) -> Unit) {
+        val connection = currentConnection ?: return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                downloadingFiles = _uiState.value.downloadingFiles + file.path
+            )
+
+            try {
+                // Create temporary file in cache directory
+                val tempDir = File(application.cacheDir, "opened_files")
+                if (!tempDir.exists()) {
+                    tempDir.mkdirs()
+                }
+                
+                val tempFile = File(tempDir, file.name)
+                
+                // Download file to temp location
+                downloadFileUseCase(connection, file, tempFile.absolutePath)
+                
+                _uiState.value = _uiState.value.copy(
+                    downloadingFiles = _uiState.value.downloadingFiles - file.path
+                )
+                
+                // Callback with the downloaded file on main thread
+                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    onFileReady(tempFile)
+                }
+                
+            } catch (exception: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    downloadingFiles = _uiState.value.downloadingFiles - file.path,
+                    error = "Failed to open ${file.name}: ${exception.message}"
                 )
             }
         }
@@ -296,6 +337,104 @@ class FileBrowserViewModel @Inject constructor(
                     // Fall back to name sorting if timestamps are not meaningful
                     files.sortedBy { it.name.lowercase() }
                 }
+            }
+        }
+    }
+
+    fun downloadSelectedFiles() {
+        val connection = currentConnection ?: return
+        val selectedFilePaths = _uiState.value.selectedFiles
+        
+        if (selectedFilePaths.isEmpty()) return
+        
+        // Get the actual file objects
+        val selectedFiles = _uiState.value.files.filter { it.path in selectedFilePaths }
+        
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoading = true)
+            
+            try {
+                var downloadedCount = 0
+                var failedCount = 0
+                var skippedDirsCount = 0
+                
+                // Use the standard public Downloads directory that users can easily access
+                val downloadDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "Grid")
+                if (!downloadDir.exists()) {
+                    downloadDir.mkdirs()
+                }
+                
+                // Log the download path for debugging
+                println("Grid: Downloading files to: ${downloadDir.absolutePath}")
+                println("Grid: Download directory exists: ${downloadDir.exists()}")
+                println("Grid: Download directory writable: ${downloadDir.canWrite()}")
+                
+                selectedFiles.forEach { file ->
+                    try {
+                        if (file.isDirectory) {
+                            // Skip directories for now
+                            skippedDirsCount++
+                        } else {
+                            val localFile = File(downloadDir, file.name)
+                            // If file exists, append number to make it unique
+                            var counter = 1
+                            var finalLocalFile = localFile
+                            while (finalLocalFile.exists()) {
+                                val nameWithoutExt = file.name.substringBeforeLast('.', file.name)
+                                val extension = if (file.name.contains('.')) ".${file.name.substringAfterLast('.')}" else ""
+                                finalLocalFile = File(downloadDir, "${nameWithoutExt}_$counter$extension")
+                                counter++
+                            }
+                            
+                            println("Grid: Attempting to download ${file.name} to ${finalLocalFile.absolutePath}")
+                            println("Grid: Parent directory exists: ${finalLocalFile.parentFile?.exists()}")
+                            println("Grid: Parent directory writable: ${finalLocalFile.parentFile?.canWrite()}")
+                            
+                            // Ensure parent directory exists
+                            finalLocalFile.parentFile?.mkdirs()
+                            
+                            downloadFileUseCase(connection, file, finalLocalFile.absolutePath)
+                            
+                            println("Grid: Download completed. File exists: ${finalLocalFile.exists()}, size: ${finalLocalFile.length()}")
+                            println("Grid: File readable: ${finalLocalFile.canRead()}")
+                            
+                            downloadedCount++
+                        }
+                    } catch (exception: Exception) {
+                        println("Grid: Failed to download ${file.name}: ${exception.message}")
+                        exception.printStackTrace()
+                        failedCount++
+                    }
+                }
+                
+                val messageParts = mutableListOf<String>()
+                if (downloadedCount > 0) messageParts.add("Downloaded $downloadedCount files")
+                if (skippedDirsCount > 0) messageParts.add("skipped $skippedDirsCount directories")
+                if (failedCount > 0) messageParts.add("failed to download $failedCount files")
+                
+                val message = if (messageParts.isNotEmpty()) {
+                    val baseMessage = messageParts.joinToString(", ").replaceFirstChar { it.uppercase() }
+                    if (downloadedCount > 0) {
+                        "$baseMessage to ${downloadDir.absolutePath}"
+                    } else {
+                        baseMessage
+                    }
+                } else {
+                    "No files to download"
+                }
+                
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isSelectionMode = false,
+                    selectedFiles = emptySet(),
+                    message = message
+                )
+                
+            } catch (exception: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Failed to download files: ${exception.message}"
+                )
             }
         }
     }

@@ -15,6 +15,7 @@ import com.grid.app.domain.usecase.connection.GetConnectionUseCase
 import com.grid.app.domain.usecase.file.CreateDirectoryUseCase
 import com.grid.app.domain.usecase.file.DeleteFileUseCase
 import com.grid.app.domain.usecase.file.DownloadFileUseCase
+import com.grid.app.domain.usecase.file.DownloadFileWithProgressUseCase
 import com.grid.app.domain.usecase.file.ListFilesUseCase
 import com.grid.app.domain.usecase.file.RenameFileUseCase
 import com.grid.app.domain.usecase.file.RenameDirUseCase
@@ -34,6 +35,7 @@ class FileBrowserViewModel @Inject constructor(
     private val getConnectionUseCase: GetConnectionUseCase,
     private val listFilesUseCase: ListFilesUseCase,
     private val downloadFileUseCase: DownloadFileUseCase,
+    private val downloadFileWithProgressUseCase: DownloadFileWithProgressUseCase,
     private val uploadFileUseCase: UploadFileUseCase,
     private val createDirectoryUseCase: CreateDirectoryUseCase,
     private val deleteFileUseCase: DeleteFileUseCase,
@@ -58,9 +60,10 @@ class FileBrowserViewModel @Inject constructor(
                 // Load settings to get view mode
                 val settings = getSettingsUseCase().first()
                 
-                // Determine the starting path based on protocol
+                // Determine the starting path based on connection configuration or protocol
                 val startingPath = initialPath ?: when (connection.protocol.name) {
                     "SMB" -> ""
+                    "FTP", "SFTP" -> connection.startingDirectory?.takeIf { it.isNotBlank() } ?: "/"
                     else -> "/"
                 }
                 
@@ -146,7 +149,8 @@ class FileBrowserViewModel @Inject constructor(
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
-                downloadingFiles = _uiState.value.downloadingFiles + file.path
+                downloadingFiles = _uiState.value.downloadingFiles + file.path,
+                downloadProgress = _uiState.value.downloadProgress + (file.path to 0f)
             )
 
             try {
@@ -158,21 +162,34 @@ class FileBrowserViewModel @Inject constructor(
                 
                 val tempFile = File(tempDir, file.name)
                 
-                // Download file to temp location
-                downloadFileUseCase(connection, file, tempFile.absolutePath)
-                
-                _uiState.value = _uiState.value.copy(
-                    downloadingFiles = _uiState.value.downloadingFiles - file.path
-                )
-                
-                // Callback with the downloaded file on main thread
-                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                    onFileReady(tempFile)
-                }
+                // Download file to temp location with progress tracking
+                downloadFileWithProgressUseCase(connection, file, tempFile.absolutePath)
+                    .collect { transfer ->
+                        val progress = if (transfer.progress.totalBytes > 0) {
+                            transfer.progress.bytesTransferred.toFloat() / transfer.progress.totalBytes.toFloat()
+                        } else {
+                            0f
+                        }
+                        
+                        _uiState.value = _uiState.value.copy(
+                            downloadProgress = _uiState.value.downloadProgress + (file.path to progress)
+                        )
+                        
+                        if (transfer.state == com.grid.app.domain.model.TransferState.COMPLETED) {
+                            _uiState.value = _uiState.value.copy(
+                                downloadingFiles = _uiState.value.downloadingFiles - file.path,
+                                downloadProgress = _uiState.value.downloadProgress - file.path
+                            )
+                            
+                            // Callback with the downloaded file on main thread
+                            onFileReady(tempFile)
+                        }
+                    }
                 
             } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles - file.path,
+                    downloadProgress = _uiState.value.downloadProgress - file.path,
                     error = "Failed to open ${file.name}: ${exception.message}"
                 )
             }

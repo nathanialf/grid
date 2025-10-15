@@ -43,8 +43,9 @@ fun LoadingView(
 @Composable
 fun WavyCircularProgressIndicator(
     modifier: Modifier = Modifier,
+    progress: Float = -1f, // -1 means indeterminate
     color: Color = MaterialTheme.colorScheme.primary,
-    strokeWidth: Float = 4.dp.value
+    strokeWidth: Float = 5.dp.value
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "WavyProgress")
     
@@ -68,17 +69,42 @@ fun WavyCircularProgressIndicator(
         label = "WavePhase"
     )
     
+    // Add smooth animation for progress changes
+    val animatedProgress by animateFloatAsState(
+        targetValue = if (progress >= 0f) progress.coerceIn(0f, 1f) else 0f,
+        animationSpec = tween(
+            durationMillis = 300,
+            easing = EaseOutQuart
+        ),
+        label = "ProgressAnimation"
+    )
+    
     Canvas(modifier = modifier) {
         val center = Offset(size.width / 2, size.height / 2)
         val radius = (size.minDimension / 2) - strokeWidth
+        val trackColor = Color.Gray.copy(alpha = 0.4f)
         
-        rotate(rotation, center) {
-            drawWavyCircle(
+        if (progress < 0f) {
+            // Indeterminate progress - rotate the entire wavy circle
+            rotate(rotation, center) {
+                drawWavyCircle(
+                    center = center,
+                    radius = radius,
+                    color = color,
+                    strokeWidth = strokeWidth,
+                    wavePhase = wavePhase
+                )
+            }
+        } else {
+            // Determinate progress - draw unified track with wavy progress and flat remaining
+            drawUnifiedTrack(
                 center = center,
                 radius = radius,
-                color = color,
+                progressColor = color,
+                trackColor = trackColor,
                 strokeWidth = strokeWidth,
-                wavePhase = wavePhase
+                wavePhase = wavePhase,
+                sweepAngle = animatedProgress * 360f
             )
         }
     }
@@ -180,6 +206,55 @@ private fun DrawScope.drawWavyLine(
     }
 }
 
+private fun DrawScope.drawUnifiedTrack(
+    center: Offset,
+    radius: Float,
+    progressColor: Color,
+    trackColor: Color,
+    strokeWidth: Float,
+    wavePhase: Float,
+    sweepAngle: Float
+) {
+    val segments = 360
+    val angleStep = 360f / segments
+    val waveAmplitude = strokeWidth * 0.6f
+    val waveFrequency = 10f
+    
+    var previousPoint: Offset? = null
+    
+    for (i in 0..segments) {
+        val angle = i * angleStep - 90f // Start from top (-90 degrees)
+        val angleRad = (angle * PI / 180f).toFloat()
+        val isInProgressSection = (angle + 90f) <= sweepAngle
+        
+        val adjustedRadius = if (isInProgressSection) {
+            // Wavy for progress section
+            val wave = sin(waveFrequency * angleRad + wavePhase) * waveAmplitude
+            radius + wave
+        } else {
+            // Flat for remaining section
+            radius
+        }
+        
+        val x = center.x + adjustedRadius * cos(angleRad)
+        val y = center.y + adjustedRadius * sin(angleRad)
+        val currentPoint = Offset(x, y)
+        
+        previousPoint?.let { prev ->
+            val segmentColor = if (isInProgressSection) progressColor else trackColor
+            drawLine(
+                color = segmentColor,
+                start = prev,
+                end = currentPoint,
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
+        
+        previousPoint = currentPoint
+    }
+}
+
 private fun DrawScope.drawWavyCircle(
     center: Offset,
     radius: Float,
@@ -189,13 +264,54 @@ private fun DrawScope.drawWavyCircle(
 ) {
     val segments = 360
     val angleStep = 360f / segments
-    val waveAmplitude = strokeWidth * 0.8f
-    val waveFrequency = 6f
+    val waveAmplitude = strokeWidth * 0.6f
+    val waveFrequency = 10f
     
     var previousPoint: Offset? = null
     
     for (i in 0..segments) {
         val angle = i * angleStep
+        val angleRad = (angle * PI / 180f).toFloat()
+        
+        // Add wave effect to the radius
+        val wave = sin(waveFrequency * angleRad + wavePhase) * waveAmplitude
+        val adjustedRadius = radius + wave
+        
+        val x = center.x + adjustedRadius * cos(angleRad)
+        val y = center.y + adjustedRadius * sin(angleRad)
+        val currentPoint = Offset(x, y)
+        
+        previousPoint?.let { prev ->
+            drawLine(
+                color = color,
+                start = prev,
+                end = currentPoint,
+                strokeWidth = strokeWidth,
+                cap = StrokeCap.Round
+            )
+        }
+        
+        previousPoint = currentPoint
+    }
+}
+
+private fun DrawScope.drawWavyArc(
+    center: Offset,
+    radius: Float,
+    color: Color,
+    strokeWidth: Float,
+    wavePhase: Float,
+    sweepAngle: Float
+) {
+    val segments = (sweepAngle / 360f * 360f).toInt().coerceAtLeast(1)
+    val angleStep = sweepAngle / segments
+    val waveAmplitude = strokeWidth * 0.6f
+    val waveFrequency = 10f
+    
+    var previousPoint: Offset? = null
+    
+    for (i in 0..segments) {
+        val angle = i * angleStep - 90f // Start from top (-90 degrees)
         val angleRad = (angle * PI / 180f).toFloat()
         
         // Add wave effect to the radius

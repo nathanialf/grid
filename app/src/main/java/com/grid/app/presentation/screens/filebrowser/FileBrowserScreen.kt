@@ -428,7 +428,8 @@ fun FileBrowserScreen(
                                 isSelected = uiState.selectedFiles.contains(file.path),
                                 onSelectionToggle = { viewModel.toggleFileSelection(file.path) },
                                 onLongPress = { viewModel.enterSelectionModeWithFile(file.path) },
-                                isDownloading = uiState.downloadingFiles.contains(file.path)
+                                isDownloading = uiState.downloadingFiles.contains(file.path),
+                                downloadProgress = uiState.downloadProgress[file.path] ?: 0f
                             )
                         }
                     }
@@ -480,7 +481,8 @@ fun FileBrowserScreen(
                                 isSelected = uiState.selectedFiles.contains(file.path),
                                 onSelectionToggle = { viewModel.toggleFileSelection(file.path) },
                                 onLongPress = { viewModel.enterSelectionModeWithFile(file.path) },
-                                isDownloading = uiState.downloadingFiles.contains(file.path)
+                                isDownloading = uiState.downloadingFiles.contains(file.path),
+                                downloadProgress = uiState.downloadProgress[file.path] ?: 0f
                             )
                         }
                     }
@@ -771,7 +773,8 @@ private fun FileItem(
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
     onLongPress: () -> Unit = {},
-    isDownloading: Boolean = false
+    isDownloading: Boolean = false,
+    downloadProgress: Float = 0f
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
     val hapticFeedback = LocalHapticFeedback.current
@@ -824,8 +827,10 @@ private fun FileItem(
             
             if (isDownloading && !file.isDirectory) {
                 WavyCircularProgressIndicator(
+                    progress = downloadProgress,
                     modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 4f
                 )
             } else {
                 Icon(
@@ -1023,7 +1028,8 @@ private fun FileGridItem(
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
     onLongPress: () -> Unit = {},
-    isDownloading: Boolean = false
+    isDownloading: Boolean = false,
+    downloadProgress: Float = 0f
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     Card(
@@ -1068,8 +1074,10 @@ private fun FileGridItem(
             ) {
                 if (isDownloading && !file.isDirectory) {
                     WavyCircularProgressIndicator(
+                        progress = downloadProgress,
                         modifier = Modifier.size(32.dp),
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 5f
                     )
                 } else {
                     Icon(

@@ -13,14 +13,14 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Opening**: Open text, image, PDF, and audio files with built-in viewers (text editor, image viewer, PDF viewer, audio player)
 - **PDF Viewer**: Native PDF viewing with page navigation, high-resolution rendering, and scroll support
 - **Audio Player**: Built-in audio player with play/pause/stop controls, progress tracking, and time display
-- **File Downloads**: Download selected files to public Downloads folder with batch support
+- **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations
 - **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling
 - **File Sorting**: Sort files by name, type, or last modified date with session persistence
 - **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
 - **Navigation**: Proper back button handling with directory-level navigation (no more jumping to root)
-- **Progress Animation**: Smooth animated progress bars for file transfer operations with instant wavy progress indicators when opening files
+- **Progress Animation**: Real-time wavy progress indicators showing actual download progress with unified track design (wavy progress + flat remaining)
 - **File Type Icons**: Intelligent file icons based on extension (PDF, images, audio, text files)
 - **Pull-to-Refresh**: Material 3 pull-to-refresh functionality for refreshing file listings
 - **Biometric Authentication**: Secure biometric unlock for connections with auto-authentication
@@ -30,7 +30,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **System UI**: Adaptive status bar colors that automatically adjust to light/dark theme
 - **Architecture**: Clean Architecture implementation with Hilt DI
 - **Secure Storage**: Android Keystore encryption for credentials
-- **Connection Management**: Add, edit, test, and manage server connections
+- **Connection Management**: Add, edit, test, and manage server connections with configurable starting directories for FTP/SFTP
 - **About Section**: Developer information with clickable website link and version info
 
 ### ⚠️ Known Issues
@@ -156,6 +156,7 @@ For biometric authentication (optional):
    - Hostname/IP address
    - Port (optional, uses protocol defaults)
    - Username and password/SSH key
+   - Starting directory (optional, for FTP/SFTP only)
 5. Test the connection to verify settings
 6. Save the connection
 

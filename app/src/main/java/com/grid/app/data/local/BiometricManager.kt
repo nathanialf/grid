@@ -69,10 +69,9 @@ class BiometricManager @Inject constructor(
                 
                 override fun onAuthenticationFailed() {
                     super.onAuthenticationFailed()
-                    println("Grid BiometricManager: Authentication failed")
-                    if (continuation.isActive) {
-                        continuation.resume(Result.failure(Exception("Authentication failed")))
-                    }
+                    println("Grid BiometricManager: Authentication failed (single attempt) - allowing retry")
+                    // Don't resume the coroutine here - this is just a single failed attempt
+                    // The user can retry. Only resume on error or success.
                 }
             })
         

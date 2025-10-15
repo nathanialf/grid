@@ -8,6 +8,7 @@ import com.grid.app.domain.repository.FileRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import java.io.File
 import java.io.FileInputStream
@@ -277,6 +278,58 @@ class FileRepositoryImpl @Inject constructor(
                 
                 // Disconnect after successful download
                 client.disconnect()
+            }
+            is Result.Error -> throw connectResult.exception
+            is Result.Loading -> throw Exception("Unexpected loading state")
+        }
+    }
+    
+    override suspend fun downloadFileWithProgress(connection: Connection, file: RemoteFile, localPath: String): Flow<FileTransfer> = flow {
+        val credential = credentialRepository.getCredentialById(connection.credentialId)
+        
+        val client = networkClientFactory.createClient(connection.protocol)
+        
+        when (val connectResult = client.connect(connection, credential)) {
+            is Result.Success -> {
+                val transferId = java.util.UUID.randomUUID().toString()
+                val fileName = file.name
+                val localFile = File(localPath)
+                
+                // Ensure parent directory exists
+                localFile.parentFile?.mkdirs()
+                
+                val transfer = FileTransfer(
+                    id = transferId,
+                    localPath = localPath,
+                    remotePath = file.path,
+                    fileName = fileName,
+                    isUpload = false,
+                    connectionId = connection.id,
+                    state = TransferState.IN_PROGRESS,
+                    progress = TransferProgress(0, file.size)
+                )
+                
+                emit(transfer)
+                
+                try {
+                    // Use try-with-resources to ensure FileOutputStream is closed
+                    FileOutputStream(localFile).use { outputStream ->
+                        client.downloadFile(file.path, outputStream).collect { progress ->
+                            val updatedTransfer = transfer.copy(
+                                progress = progress,
+                                state = if (progress.bytesTransferred >= progress.totalBytes) {
+                                    TransferState.COMPLETED
+                                } else {
+                                    TransferState.IN_PROGRESS
+                                }
+                            )
+                            emit(updatedTransfer)
+                        }
+                    }
+                } finally {
+                    // Disconnect after download (success or failure)
+                    client.disconnect()
+                }
             }
             is Result.Error -> throw connectResult.exception
             is Result.Loading -> throw Exception("Unexpected loading state")

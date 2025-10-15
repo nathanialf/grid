@@ -26,6 +26,8 @@ interface FileRepository {
     
     suspend fun downloadFile(connection: Connection, file: RemoteFile, localPath: String)
     
+    suspend fun downloadFileWithProgress(connection: Connection, file: RemoteFile, localPath: String): Flow<FileTransfer>
+    
     suspend fun uploadFile(
         connectionId: String,
         localPath: String,

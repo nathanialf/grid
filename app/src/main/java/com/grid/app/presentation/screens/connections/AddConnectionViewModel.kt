@@ -52,7 +52,8 @@ class AddConnectionViewModel @Inject constructor(
                         username = credential.username,
                         password = credential.password,
                         sshKey = credential.privateKey ?: "",
-                        shareName = connection.shareName ?: ""
+                        shareName = connection.shareName ?: "",
+                        startingDirectory = connection.startingDirectory ?: ""
                     ),
                     isEditMode = true,
                     connectionId = connectionId,
@@ -103,7 +104,8 @@ class AddConnectionViewModel @Inject constructor(
                         protocol = state.formData.protocol,
                         port = state.formData.port.toIntOrNull() ?: state.formData.protocol.defaultPort,
                         credentialId = credentialId,
-                        shareName = if (state.formData.shareName.isNotBlank()) state.formData.shareName else null
+                        shareName = if (state.formData.shareName.isNotBlank()) state.formData.shareName else null,
+                        startingDirectory = if (state.formData.startingDirectory.isNotBlank()) state.formData.startingDirectory else null
                     )
                     updateConnectionUseCase(connection)
                 } else {
@@ -116,7 +118,8 @@ class AddConnectionViewModel @Inject constructor(
                         protocol = state.formData.protocol,
                         port = state.formData.port.toIntOrNull() ?: state.formData.protocol.defaultPort,
                         credentialId = credentialId,
-                        shareName = if (state.formData.shareName.isNotBlank()) state.formData.shareName else null
+                        shareName = if (state.formData.shareName.isNotBlank()) state.formData.shareName else null,
+                        startingDirectory = if (state.formData.startingDirectory.isNotBlank()) state.formData.startingDirectory else null
                     )
                     createConnectionUseCase(connection)
                 }
@@ -159,7 +162,8 @@ class AddConnectionViewModel @Inject constructor(
                     protocol = state.formData.protocol,
                     port = state.formData.port.toIntOrNull() ?: state.formData.protocol.defaultPort,
                     credentialId = "temp",
-                    shareName = if (state.formData.shareName.isNotBlank()) state.formData.shareName else null
+                    shareName = if (state.formData.shareName.isNotBlank()) state.formData.shareName else null,
+                    startingDirectory = if (state.formData.startingDirectory.isNotBlank()) state.formData.startingDirectory else null
                 )
 
                 val result = testConnectionUseCase(connection, credential)

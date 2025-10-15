@@ -284,6 +284,22 @@ private fun ConnectionForm(
                         supportingText = { Text("Leave empty to auto-discover shares") }
                     )
                 }
+                
+                // Starting Directory field (for FTP and SFTP only)
+                if (formData.protocol in listOf(Protocol.FTP, Protocol.SFTP)) {
+                    OutlinedTextField(
+                        value = formData.startingDirectory,
+                        onValueChange = { onFormDataChange(formData.copy(startingDirectory = it)) },
+                        label = { Text("Starting Directory (optional)") },
+                        leadingIcon = {
+                            Icon(Icons.Default.FolderOpen, contentDescription = null)
+                        },
+                        placeholder = { Text("/path/to/folder") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        supportingText = { Text("Directory to open when connecting (defaults to /)") }
+                    )
+                }
             }
         }
         
@@ -468,7 +484,8 @@ data class ConnectionFormData(
     val username: String = "",
     val password: String = "",
     val sshKey: String = "",
-    val shareName: String = ""
+    val shareName: String = "",
+    val startingDirectory: String = ""
 ) {
     fun isValid(): Boolean {
         return name.isNotBlank() && 

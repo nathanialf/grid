@@ -25,12 +25,11 @@ A modern Android application for browsing and managing files on remote servers t
 - **Architecture**: Clean Architecture implementation with Hilt DI
 - **Secure Storage**: Android Keystore encryption for credentials
 - **Connection Management**: Add, edit, test, and manage server connections
-- **About Section**: Developer information and settings
+- **About Section**: Developer information with clickable website link and version info
 
 ### ⚠️ Known Issues
 - **SFTP**: Connection failures with cryptography provider issues - not currently functional
 - **FTP**: Connection timeout and stability issues - not currently functional
-- **Connection Testing**: SMB test connections may show false negatives despite working connections
 - **Directory Downloads**: Directory downloads are skipped (files only for now)
 
 ### 🚧 In Development
@@ -154,7 +153,10 @@ For biometric authentication (optional):
    - Hostname/IP address
    - Port (optional, uses protocol defaults)
    - Username and password/SSH key
-5. Save the connection
+5. Test the connection to verify settings
+6. Save the connection
+
+**Note**: SMB connection testing works reliably and accurately reflects connection status.
 
 ### Managing Credentials
 - Credentials are automatically encrypted using Android Keystore
@@ -162,11 +164,13 @@ For biometric authentication (optional):
 - Credentials are stored locally and never transmitted unencrypted
 
 ### File Operations
-- Browse remote directories
-- Download files to local storage
-- Upload files from device
-- Create, rename, and delete files/folders
-- View file properties and permissions
+- Browse remote directories with pull-to-refresh functionality
+- Download files to local storage (accessible Downloads folder)
+- Upload files from device with real-time progress indicators
+- Create, rename, and delete files/folders with confirmation dialogs
+- Multi-select mode for batch operations
+- Open text and image files with built-in viewers
+- Sort files by name, type, or modification date
 
 ## Development
 

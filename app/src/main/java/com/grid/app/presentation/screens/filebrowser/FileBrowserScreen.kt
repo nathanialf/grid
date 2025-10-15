@@ -373,7 +373,12 @@ fun FileBrowserScreen(
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 150.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
+                        contentPadding = PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top = 16.dp,
+                            bottom = 96.dp // Extra padding for floating toolbar
+                        ),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
@@ -420,7 +425,12 @@ fun FileBrowserScreen(
                     } else {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(16.dp),
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 16.dp,
+                                bottom = 96.dp // Extra padding for floating toolbar
+                            ),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                         // Show parent directory if not at root

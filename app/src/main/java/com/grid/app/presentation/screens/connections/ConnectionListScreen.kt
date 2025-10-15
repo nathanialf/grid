@@ -149,7 +149,12 @@ fun ConnectionListScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
-                    contentPadding = PaddingValues(16.dp),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                        bottom = 96.dp // Extra padding for floating toolbar
+                    ),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     itemsIndexed(uiState.connections) { index, connection ->

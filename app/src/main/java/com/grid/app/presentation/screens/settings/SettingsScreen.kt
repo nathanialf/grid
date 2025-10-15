@@ -19,6 +19,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.grid.app.presentation.theme.GridTheme
+import android.content.Intent
+import android.net.Uri
 
 @Composable
 fun SettingsScreen(
@@ -114,7 +116,10 @@ fun SettingsScreen(
                     title = "Developed by Nathanial Fine",
                     subtitle = "defnf.com",
                     icon = Icons.Default.Person,
-                    onClick = { /* TODO: Open website */ }
+                    onClick = { 
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://defnf.com"))
+                        context.startActivity(intent)
+                    }
                 )
                 
                 SettingsClickableItem(

@@ -22,7 +22,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Sorting**: Sort files by name, type, or last modified date with session persistence
 - **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
-- **Navigation**: Proper back button handling with directory-level navigation (no more jumping to root)
+- **Navigation**: Home button for quick return to connections, back swipe gesture for directory navigation
 - **Progress Animation**: Real-time wavy progress indicators showing actual download progress with unified track design (wavy progress + flat remaining)
 - **File Type Icons**: Intelligent file icons based on extension (PDF, images, audio, video, text files)
 - **Pull-to-Refresh**: Material 3 pull-to-refresh functionality for refreshing file listings

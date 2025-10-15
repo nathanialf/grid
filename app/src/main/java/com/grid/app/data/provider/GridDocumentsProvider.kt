@@ -44,6 +44,16 @@ class GridDocumentsProvider : DocumentsProvider() {
         private const val AUTHORITY = "com.grid.app.documents"
         private const val ROOT_CONNECTION_LIST = "connections"
         
+        fun notifyRootsChanged(context: android.content.Context) {
+            try {
+                val uri = DocumentsContract.buildRootsUri(AUTHORITY)
+                context.contentResolver.notifyChange(uri, null)
+                android.util.Log.d("GridDocumentsProvider", "Notified system of roots change")
+            } catch (e: Exception) {
+                android.util.Log.e("GridDocumentsProvider", "Failed to notify roots change", e)
+            }
+        }
+        
         private val DEFAULT_ROOT_PROJECTION = arrayOf(
             DocumentsContract.Root.COLUMN_ROOT_ID,
             DocumentsContract.Root.COLUMN_MIME_TYPES,

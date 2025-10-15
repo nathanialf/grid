@@ -18,7 +18,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
@@ -147,14 +146,12 @@ fun FileBrowserScreen(
                 navigationIcon = {
                     IconButton(
                         onClick = {
-                            if (!viewModel.handleBackNavigation()) {
-                                onNavigateBack()
-                            }
+                            onNavigateBack()
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            imageVector = Icons.Filled.Home,
+                            contentDescription = "Home"
                         )
                     }
                 },

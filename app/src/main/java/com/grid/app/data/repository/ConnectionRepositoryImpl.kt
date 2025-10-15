@@ -1,9 +1,12 @@
 package com.grid.app.data.repository
 
+import android.content.Context
 import com.grid.app.data.local.PreferencesManager
+import com.grid.app.data.provider.GridDocumentsProvider
 import com.grid.app.domain.model.Connection
 import com.grid.app.domain.model.Result
 import com.grid.app.domain.repository.ConnectionRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -12,7 +15,8 @@ import javax.inject.Singleton
 
 @Singleton
 class ConnectionRepositoryImpl @Inject constructor(
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    @ApplicationContext private val context: Context
 ) : ConnectionRepository {
     
     override fun getAllConnections(): Flow<List<Connection>> {
@@ -35,6 +39,7 @@ class ConnectionRepositoryImpl @Inject constructor(
         
         currentConnections.add(connectionWithOrder)
         preferencesManager.saveConnections(currentConnections)
+        GridDocumentsProvider.notifyRootsChanged(context)
     }
     
     override suspend fun updateConnection(connection: Connection) {
@@ -44,6 +49,7 @@ class ConnectionRepositoryImpl @Inject constructor(
         if (existingIndex >= 0) {
             currentConnections[existingIndex] = connection
             preferencesManager.saveConnections(currentConnections)
+            GridDocumentsProvider.notifyRootsChanged(context)
         } else {
             throw IllegalArgumentException("Connection not found: ${connection.id}")
         }
@@ -65,6 +71,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             }
             
             preferencesManager.saveConnections(currentConnections)
+            GridDocumentsProvider.notifyRootsChanged(context)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -76,6 +83,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             val currentConnections = preferencesManager.getConnections().first().toMutableList()
             currentConnections.removeAll { it.id == id }
             preferencesManager.saveConnections(currentConnections)
+            GridDocumentsProvider.notifyRootsChanged(context)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
@@ -110,6 +118,7 @@ class ConnectionRepositoryImpl @Inject constructor(
                 val updatedConnection = currentConnections[connectionIndex].copy(order = newOrder)
                 currentConnections[connectionIndex] = updatedConnection
                 preferencesManager.saveConnections(currentConnections)
+                GridDocumentsProvider.notifyRootsChanged(context)
             }
             
             Result.Success(Unit)

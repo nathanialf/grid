@@ -14,7 +14,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **PDF Viewer**: Native PDF viewing with page navigation, high-resolution rendering, and scroll support
 - **Audio Player**: Built-in audio player with play/pause/stop controls, progress tracking, and time display
 - **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
-- **Multi-Select**: File selection mode with multi-select capabilities and batch operations
+- **Multi-Select**: File selection mode with multi-select capabilities and batch operations (auto-exits on download start)
 - **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling
 - **File Sorting**: Sort files by name, type, or last modified date with session persistence
 - **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)

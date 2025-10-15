@@ -388,7 +388,14 @@ class FileBrowserViewModel @Inject constructor(
         val selectedFiles = _uiState.value.files.filter { it.path in selectedFilePaths }
         
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            // Start progress tracking for all selected files and immediately clear selection mode
+            val filesToDownload = selectedFiles.filter { !it.isDirectory }
+            _uiState.value = _uiState.value.copy(
+                downloadingFiles = _uiState.value.downloadingFiles + filesToDownload.map { it.path }.toSet(),
+                downloadProgress = _uiState.value.downloadProgress + filesToDownload.associate { it.path to 0f },
+                isSelectionMode = false,
+                selectedFiles = emptySet()
+            )
             
             try {
                 var downloadedCount = 0
@@ -430,7 +437,26 @@ class FileBrowserViewModel @Inject constructor(
                             // Ensure parent directory exists
                             finalLocalFile.parentFile?.mkdirs()
                             
-                            downloadFileUseCase(connection, file, finalLocalFile.absolutePath)
+                            // Download with progress tracking
+                            downloadFileWithProgressUseCase(connection, file, finalLocalFile.absolutePath)
+                                .collect { transfer ->
+                                    val progress = if (transfer.progress.totalBytes > 0) {
+                                        transfer.progress.bytesTransferred.toFloat() / transfer.progress.totalBytes.toFloat()
+                                    } else {
+                                        0f
+                                    }
+                                    
+                                    _uiState.value = _uiState.value.copy(
+                                        downloadProgress = _uiState.value.downloadProgress + (file.path to progress)
+                                    )
+                                    
+                                    if (transfer.state == com.grid.app.domain.model.TransferState.COMPLETED) {
+                                        _uiState.value = _uiState.value.copy(
+                                            downloadingFiles = _uiState.value.downloadingFiles - file.path,
+                                            downloadProgress = _uiState.value.downloadProgress - file.path
+                                        )
+                                    }
+                                }
                             
                             println("Grid: Download completed. File exists: ${finalLocalFile.exists()}, size: ${finalLocalFile.length()}")
                             println("Grid: File readable: ${finalLocalFile.canRead()}")
@@ -441,6 +467,12 @@ class FileBrowserViewModel @Inject constructor(
                         println("Grid: Failed to download ${file.name}: ${exception.message}")
                         exception.printStackTrace()
                         failedCount++
+                        
+                        // Remove failed download from progress tracking
+                        _uiState.value = _uiState.value.copy(
+                            downloadingFiles = _uiState.value.downloadingFiles - file.path,
+                            downloadProgress = _uiState.value.downloadProgress - file.path
+                        )
                     }
                 }
                 
@@ -461,15 +493,14 @@ class FileBrowserViewModel @Inject constructor(
                 }
                 
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isSelectionMode = false,
-                    selectedFiles = emptySet(),
                     message = message
                 )
                 
             } catch (exception: Exception) {
+                // Clear any remaining download progress on error
                 _uiState.value = _uiState.value.copy(
-                    isLoading = false,
+                    downloadingFiles = emptySet(),
+                    downloadProgress = emptyMap(),
                     error = "Failed to download files: ${exception.message}"
                 )
             }

@@ -10,8 +10,8 @@ A modern Android application for browsing and managing files on remote servers t
 - **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
-- **File Opening**: Open text, image, PDF, and audio files with built-in viewers (text editor, image viewer, PDF viewer, audio player)
-- **PDF Viewer**: Native PDF viewing with page navigation, high-resolution rendering, and scroll support
+- **File Opening**: Open text, image, PDF, and audio files with built-in viewers (text editor, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player)
+- **PDF Viewer**: Native PDF viewing with page navigation, high-resolution rendering, pinch-to-zoom, and pan support
 - **Audio Player**: Built-in audio player with play/pause/stop controls, progress tracking, and time display
 - **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations (auto-exits on download start)
@@ -173,7 +173,7 @@ For biometric authentication (optional):
 - Upload files from device with real-time progress indicators
 - Create, rename, and delete files/folders with confirmation dialogs
 - Multi-select mode for batch operations
-- Open text, image, and PDF files with built-in viewers
+- Open text, image, and PDF files with built-in viewers featuring pinch-to-zoom and pan gestures
 - Sort files by name, type, or modification date
 
 ## Development

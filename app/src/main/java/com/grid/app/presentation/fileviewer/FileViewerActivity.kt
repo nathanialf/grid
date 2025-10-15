@@ -8,6 +8,10 @@ import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,10 +30,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.geometry.Offset
 import android.graphics.BitmapFactory
 import com.grid.app.presentation.theme.GridTheme
 import com.grid.app.presentation.components.LoadingView
@@ -150,6 +156,15 @@ private fun ImageViewer(
     var imageBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     
+    // Zoom and pan state
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    
+    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+        offset += panChange
+    }
+    
     LaunchedEffect(file) {
         try {
             val bitmap = BitmapFactory.decodeFile(file.absolutePath)
@@ -174,7 +189,23 @@ private fun ImageViewer(
                 Image(
                     bitmap = imageBitmap!!,
                     contentDescription = file.name,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offset.x,
+                            translationY = offset.y
+                        )
+                        .transformable(transformableState)
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                }
+                            )
+                        },
                     contentScale = ContentScale.Fit
                 )
             }
@@ -227,6 +258,21 @@ private fun PdfViewer(
     var pageBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    
+    // Zoom and pan state for PDF pages
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    
+    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(0.5f, 5f)
+        offset += panChange
+    }
+    
+    // Reset zoom when page changes
+    LaunchedEffect(currentPage) {
+        scale = 1f
+        offset = Offset.Zero
+    }
 
     // Initialize PDF renderer
     LaunchedEffect(file) {
@@ -355,7 +401,21 @@ private fun PdfViewer(
                         contentDescription = "PDF Page ${currentPage + 1}",
                         modifier = Modifier
                             .fillMaxSize()
-                            .verticalScroll(rememberScrollState()),
+                            .graphicsLayer(
+                                scaleX = scale,
+                                scaleY = scale,
+                                translationX = offset.x,
+                                translationY = offset.y
+                            )
+                            .transformable(transformableState)
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onDoubleTap = {
+                                        scale = 1f
+                                        offset = Offset.Zero
+                                    }
+                                )
+                            },
                         contentScale = ContentScale.Fit
                     )
                 }

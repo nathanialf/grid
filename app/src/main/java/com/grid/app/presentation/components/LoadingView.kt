@@ -143,29 +143,65 @@ fun WavyLinearProgressIndicator(
     Canvas(modifier = modifier.height(strokeWidth.dp)) {
         val progressWidth = size.width * animatedProgress
         
-        // Draw background
-        drawWavyLine(
-            startX = 0f,
-            endX = size.width,
-            y = size.height / 2,
-            color = backgroundColor,
+        // Draw unified track - wavy progress + flat remaining
+        drawUnifiedLinearTrack(
+            width = size.width,
+            height = size.height,
+            progressWidth = progressWidth,
+            progressColor = color,
+            trackColor = backgroundColor,
             strokeWidth = strokeWidth,
-            wavePhase = wavePhase,
-            waveAmplitude = strokeWidth * 0.6f
+            wavePhase = wavePhase
         )
+    }
+}
+
+private fun DrawScope.drawUnifiedLinearTrack(
+    width: Float,
+    height: Float,
+    progressWidth: Float,
+    progressColor: Color,
+    trackColor: Color,
+    strokeWidth: Float,
+    wavePhase: Float
+) {
+    val y = height / 2
+    val waveAmplitude = strokeWidth * 0.6f
+    val segments = (width / 1f).toInt().coerceAtLeast(50)
+    val stepX = width / segments
+    
+    // Use fixed wavelength in pixels for consistent appearance
+    val wavelengthInPixels = 80f
+    
+    var previousPoint: Offset? = null
+    
+    for (i in 0..segments) {
+        val x = i * stepX
+        val isInProgressSection = x <= progressWidth
         
-        // Draw progress
-        if (progressWidth > 0f) {
-            drawWavyLine(
-                startX = 0f,
-                endX = progressWidth,
-                y = size.height / 2,
-                color = color,
+        val currentY = if (isInProgressSection) {
+            // Wavy for progress section
+            val wave = sin((2f * PI * x / wavelengthInPixels + wavePhase).toFloat()) * waveAmplitude
+            y + wave
+        } else {
+            // Flat for remaining section
+            y
+        }
+        
+        val currentPoint = Offset(x, currentY)
+        
+        previousPoint?.let { prev ->
+            val segmentColor = if (isInProgressSection) progressColor else trackColor
+            drawLine(
+                color = segmentColor,
+                start = prev,
+                end = currentPoint,
                 strokeWidth = strokeWidth,
-                wavePhase = wavePhase,
-                waveAmplitude = strokeWidth * 0.6f
+                cap = StrokeCap.Round
             )
         }
+        
+        previousPoint = currentPoint
     }
 }
 

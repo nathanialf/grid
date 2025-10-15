@@ -148,11 +148,6 @@ class FileBrowserViewModel @Inject constructor(
         val connection = currentConnection ?: return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                downloadingFiles = _uiState.value.downloadingFiles + file.path,
-                downloadProgress = _uiState.value.downloadProgress + (file.path to 0f)
-            )
-
             try {
                 // Create temporary file in cache directory
                 val tempDir = File(application.cacheDir, "opened_files")
@@ -160,7 +155,22 @@ class FileBrowserViewModel @Inject constructor(
                     tempDir.mkdirs()
                 }
                 
-                val tempFile = File(tempDir, file.name)
+                // Create cache filename that includes connection and path info to avoid conflicts
+                val cacheFileName = "${connection.id}_${file.path.replace('/', '_')}_${file.name}"
+                val tempFile = File(tempDir, cacheFileName)
+                
+                // Check if file is already cached and valid
+                if (tempFile.exists() && isCacheValid(tempFile, file)) {
+                    // File is cached and valid, use it directly
+                    onFileReady(tempFile)
+                    return@launch
+                }
+                
+                // File not cached or invalid, download it
+                _uiState.value = _uiState.value.copy(
+                    downloadingFiles = _uiState.value.downloadingFiles + file.path,
+                    downloadProgress = _uiState.value.downloadProgress + (file.path to 0f)
+                )
                 
                 // Download file to temp location with progress tracking
                 downloadFileWithProgressUseCase(connection, file, tempFile.absolutePath)
@@ -192,6 +202,33 @@ class FileBrowserViewModel @Inject constructor(
                     downloadProgress = _uiState.value.downloadProgress - file.path,
                     error = "Failed to open ${file.name}: ${exception.message}"
                 )
+            }
+        }
+    }
+
+    private fun isCacheValid(cachedFile: File, remoteFile: RemoteFile): Boolean {
+        // Check if cached file size matches remote file size
+        // If remote file size is unknown (0 or -1), we assume cache is valid if file exists
+        return if (remoteFile.size > 0) {
+            cachedFile.length() == remoteFile.size
+        } else {
+            // For files without size info, assume cache is valid if it exists and isn't empty
+            cachedFile.exists() && cachedFile.length() > 0
+        }
+    }
+
+    fun clearFileCache() {
+        viewModelScope.launch {
+            try {
+                val tempDir = File(application.cacheDir, "opened_files")
+                if (tempDir.exists()) {
+                    tempDir.listFiles()?.forEach { file ->
+                        file.delete()
+                    }
+                }
+            } catch (e: Exception) {
+                // Log error but don't crash
+                android.util.Log.e("FileBrowserViewModel", "Failed to clear file cache", e)
             }
         }
     }

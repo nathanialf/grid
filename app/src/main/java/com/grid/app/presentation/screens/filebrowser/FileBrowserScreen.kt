@@ -17,9 +17,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -37,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpOffset
 import com.grid.app.domain.model.RemoteFile
 import com.grid.app.presentation.theme.GridTheme
+import com.grid.app.presentation.components.WavyCircularProgressIndicator
 import com.grid.app.presentation.components.ErrorView
 import com.grid.app.presentation.components.EmptyDirectoryView
 import com.grid.app.presentation.components.LoadingView
@@ -424,7 +427,8 @@ fun FileBrowserScreen(
                                 isSelectionMode = uiState.isSelectionMode,
                                 isSelected = uiState.selectedFiles.contains(file.path),
                                 onSelectionToggle = { viewModel.toggleFileSelection(file.path) },
-                                onLongPress = { viewModel.enterSelectionModeWithFile(file.path) }
+                                onLongPress = { viewModel.enterSelectionModeWithFile(file.path) },
+                                isDownloading = uiState.downloadingFiles.contains(file.path)
                             )
                         }
                     }
@@ -475,7 +479,8 @@ fun FileBrowserScreen(
                                 isSelectionMode = uiState.isSelectionMode,
                                 isSelected = uiState.selectedFiles.contains(file.path),
                                 onSelectionToggle = { viewModel.toggleFileSelection(file.path) },
-                                onLongPress = { viewModel.enterSelectionModeWithFile(file.path) }
+                                onLongPress = { viewModel.enterSelectionModeWithFile(file.path) },
+                                isDownloading = uiState.downloadingFiles.contains(file.path)
                             )
                         }
                     }
@@ -765,7 +770,8 @@ private fun FileItem(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
-    onLongPress: () -> Unit = {}
+    onLongPress: () -> Unit = {},
+    isDownloading: Boolean = false
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
     val hapticFeedback = LocalHapticFeedback.current
@@ -816,11 +822,18 @@ private fun FileItem(
                 Spacer(modifier = Modifier.width(8.dp))
             }
             
-            Icon(
-                imageVector = if (file.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
-                contentDescription = if (file.isDirectory) "Directory" else "File",
-                tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (isDownloading && !file.isDirectory) {
+                WavyCircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            } else {
+                Icon(
+                    imageVector = if (file.isDirectory) Icons.Default.Folder else getFileIcon(file.name),
+                    contentDescription = if (file.isDirectory) "Directory" else "File",
+                    tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
             
             Spacer(modifier = Modifier.width(16.dp))
             
@@ -883,7 +896,7 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 private enum class FileType {
-    TEXT, IMAGE, PDF, UNKNOWN
+    TEXT, IMAGE, PDF, AUDIO, UNKNOWN
 }
 
 private fun getFileType(fileName: String): FileType {
@@ -895,6 +908,9 @@ private fun getFileType(fileName: String): FileType {
         
         // PDF extensions
         extension == "pdf" -> FileType.PDF
+        
+        // Audio extensions
+        extension in setOf("mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus") -> FileType.AUDIO
         
         // Text extensions
         extension in setOf(
@@ -911,6 +927,33 @@ private fun getFileType(fileName: String): FileType {
     }
 }
 
+private fun getFileIcon(fileName: String): ImageVector {
+    val extension = fileName.substringAfterLast('.', "").lowercase()
+    
+    return when {
+        // PDF files
+        extension == "pdf" -> Icons.Default.PictureAsPdf
+        
+        // Images
+        extension in setOf("jpg", "jpeg", "png", "gif", "bmp", "webp", "svg") -> Icons.Default.Image
+        
+        // Audio files
+        extension in setOf("mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus") -> Icons.Default.AudioFile
+        
+        // Text files
+        extension in setOf("txt", "md", "json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
+            "cpp", "c", "h", "cs", "php", "rb", "go", "rs", "swift", "yml", "yaml", "toml",
+            "properties", "ini", "cfg", "conf", "log", "csv", "sql", "sh", "bat", "dockerfile",
+            "gitignore", "gradle", "makefile", "readme") -> Icons.AutoMirrored.Filled.TextSnippet
+        
+        // Files without extension
+        extension.isEmpty() -> Icons.AutoMirrored.Filled.TextSnippet
+        
+        // Default file icon for unsupported types
+        else -> Icons.AutoMirrored.Filled.InsertDriveFile
+    }
+}
+
 private fun handleFileOpen(
     context: android.content.Context,
     viewModel: FileBrowserViewModel,
@@ -919,7 +962,7 @@ private fun handleFileOpen(
     val fileType = getFileType(file.name)
     
     when (fileType) {
-        FileType.TEXT, FileType.IMAGE, FileType.PDF -> {
+        FileType.TEXT, FileType.IMAGE, FileType.PDF, FileType.AUDIO -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
                 val intent = Intent(context, com.grid.app.presentation.fileviewer.FileViewerActivity::class.java).apply {
@@ -979,7 +1022,8 @@ private fun FileGridItem(
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
-    onLongPress: () -> Unit = {}
+    onLongPress: () -> Unit = {},
+    isDownloading: Boolean = false
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     Card(
@@ -1022,12 +1066,19 @@ private fun FileGridItem(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    imageVector = if (file.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
-                    contentDescription = if (file.isDirectory) "Directory" else "File",
-                    modifier = Modifier.size(if (file.isDirectory) 40.dp else 32.dp),
-                    tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (isDownloading && !file.isDirectory) {
+                    WavyCircularProgressIndicator(
+                        modifier = Modifier.size(32.dp),
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (file.isDirectory) Icons.Default.Folder else getFileIcon(file.name),
+                        contentDescription = if (file.isDirectory) "Directory" else "File",
+                        modifier = Modifier.size(if (file.isDirectory) 40.dp else 32.dp),
+                        tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(6.dp))
 

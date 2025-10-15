@@ -10,8 +10,9 @@ A modern Android application for browsing and managing files on remote servers t
 - **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
-- **File Opening**: Open text, image, and PDF files with built-in viewers (text editor, image viewer, PDF viewer)
+- **File Opening**: Open text, image, PDF, and audio files with built-in viewers (text editor, image viewer, PDF viewer, audio player)
 - **PDF Viewer**: Native PDF viewing with page navigation, high-resolution rendering, and scroll support
+- **Audio Player**: Built-in audio player with play/pause/stop controls, progress tracking, and time display
 - **File Downloads**: Download selected files to public Downloads folder with batch support
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations
 - **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling
@@ -19,12 +20,14 @@ A modern Android application for browsing and managing files on remote servers t
 - **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
 - **Navigation**: Proper back button handling with directory-level navigation (no more jumping to root)
-- **Progress Animation**: Smooth animated progress bars for file transfer operations
+- **Progress Animation**: Smooth animated progress bars for file transfer operations with instant wavy progress indicators when opening files
+- **File Type Icons**: Intelligent file icons based on extension (PDF, images, audio, text files)
 - **Pull-to-Refresh**: Material 3 pull-to-refresh functionality for refreshing file listings
 - **Biometric Authentication**: Secure biometric unlock for connections with auto-authentication
 - **Connection Reordering**: Move up/down buttons in connection menu for custom ordering
 - **Settings System**: Persistent settings with theme switching and view mode preferences  
 - **UI Framework**: Material 3 interface with expressive floating toolbars and navigation
+- **System UI**: Adaptive status bar colors that automatically adjust to light/dark theme
 - **Architecture**: Clean Architecture implementation with Hilt DI
 - **Secure Storage**: Android Keystore encryption for credentials
 - **Connection Management**: Add, edit, test, and manage server connections
@@ -35,7 +38,7 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### 🚧 In Development
 - Directory download support with recursive file extraction
-- Additional file type viewers (video, audio)
+- Additional file type viewers (video)
 - File search and filtering capabilities
 
 ## Features

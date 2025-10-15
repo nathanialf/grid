@@ -2,6 +2,7 @@ package com.grid.app.presentation.fileviewer
 
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
+import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import androidx.activity.ComponentActivity
@@ -14,8 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.NavigateBefore
-import androidx.compose.material.icons.filled.NavigateNext
+import androidx.compose.material.icons.automirrored.filled.NavigateBefore
+import androidx.compose.material.icons.automirrored.filled.NavigateNext
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,10 +32,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import android.graphics.BitmapFactory
 import com.grid.app.presentation.theme.GridTheme
+import com.grid.app.presentation.components.LoadingView
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @AndroidEntryPoint
@@ -113,6 +121,12 @@ fun FileViewerContent(
         }
         "PDF" -> {
             PdfViewer(
+                file = file,
+                modifier = modifier
+            )
+        }
+        "AUDIO" -> {
+            AudioPlayer(
                 file = file,
                 modifier = modifier
             )
@@ -293,7 +307,7 @@ private fun PdfViewer(
                         enabled = currentPage > 0
                     ) {
                         Icon(
-                            imageVector = Icons.Default.NavigateBefore,
+                            imageVector = Icons.AutoMirrored.Filled.NavigateBefore,
                             contentDescription = "Previous page"
                         )
                     }
@@ -309,7 +323,7 @@ private fun PdfViewer(
                         enabled = currentPage < totalPages - 1
                     ) {
                         Icon(
-                            imageVector = Icons.Default.NavigateNext,
+                            imageVector = Icons.AutoMirrored.Filled.NavigateNext,
                             contentDescription = "Next page"
                         )
                     }
@@ -351,4 +365,198 @@ private fun PdfViewer(
             }
         }
     }
+}
+
+@Composable
+private fun AudioPlayer(
+    file: File,
+    modifier: Modifier = Modifier
+) {
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentPosition by remember { mutableStateOf(0) }
+    var duration by remember { mutableStateOf(0) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Initialize MediaPlayer
+    LaunchedEffect(file) {
+        withContext(Dispatchers.IO) {
+            try {
+                val player = MediaPlayer().apply {
+                    setDataSource(file.absolutePath)
+                    prepare()
+                }
+                
+                withContext(Dispatchers.Main) {
+                    mediaPlayer = player
+                    duration = player.duration
+                    isLoading = false
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    error = "Error loading audio: ${e.message}"
+                    isLoading = false
+                }
+            }
+        }
+    }
+
+    // Update progress
+    LaunchedEffect(isPlaying) {
+        while (isPlaying && mediaPlayer != null) {
+            currentPosition = mediaPlayer?.currentPosition ?: 0
+            delay(1000) // Update every second
+        }
+    }
+
+    // Cleanup
+    DisposableEffect(file) {
+        onDispose {
+            mediaPlayer?.release()
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        when {
+            isLoading -> {
+                CircularProgressIndicator()
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("Loading audio...")
+            }
+            error != null -> {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = null,
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = error!!,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+            }
+            else -> {
+                // Audio icon
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                    contentDescription = "Audio file",
+                    modifier = Modifier.size(64.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // File name
+                Text(
+                    text = file.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                // Progress bar
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        // Time display
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = formatTime(currentPosition),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                text = formatTime(duration),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Progress bar
+                        LinearProgressIndicator(
+                            progress = { if (duration > 0) currentPosition.toFloat() / duration else 0f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                // Controls
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Stop button
+                    IconButton(
+                        onClick = {
+                            mediaPlayer?.let { player ->
+                                if (player.isPlaying) {
+                                    player.pause()
+                                }
+                                player.seekTo(0)
+                                currentPosition = 0
+                                isPlaying = false
+                            }
+                        },
+                        enabled = mediaPlayer != null
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    
+                    // Play/Pause button
+                    FloatingActionButton(
+                        onClick = {
+                            mediaPlayer?.let { player ->
+                                if (isPlaying) {
+                                    player.pause()
+                                    isPlaying = false
+                                } else {
+                                    player.start()
+                                    isPlaying = true
+                                }
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper function to format time in mm:ss format
+private fun formatTime(milliseconds: Int): String {
+    val seconds = (milliseconds / 1000) % 60
+    val minutes = (milliseconds / (1000 * 60)) % 60
+    return "%02d:%02d".format(minutes, seconds)
 }

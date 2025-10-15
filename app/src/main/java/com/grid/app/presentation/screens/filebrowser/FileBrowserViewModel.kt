@@ -47,7 +47,7 @@ class FileBrowserViewModel @Inject constructor(
 
     private var currentConnection: Connection? = null
 
-    fun initialize(connectionId: String, initialPath: String = "/") {
+    fun initialize(connectionId: String, initialPath: String? = null) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
@@ -57,10 +57,17 @@ class FileBrowserViewModel @Inject constructor(
 
                 // Load settings to get view mode
                 val settings = getSettingsUseCase().first()
+                
+                // Determine the starting path based on protocol
+                val startingPath = initialPath ?: when (connection.protocol.name) {
+                    "SMB" -> ""
+                    else -> "/"
+                }
+                
                 _uiState.value = _uiState.value.copy(
                     connectionId = connectionId,
                     connectionName = connection.name,
-                    currentPath = initialPath,
+                    currentPath = startingPath,
                     viewMode = settings.defaultViewMode.name.lowercase(),
                     showHiddenFiles = settings.showHiddenFiles,
                     protocol = connection.protocol.name,
@@ -68,7 +75,7 @@ class FileBrowserViewModel @Inject constructor(
                     isLoading = false
                 )
 
-                loadFiles(initialPath)
+                loadFiles(startingPath)
             } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -616,6 +623,7 @@ data class FileBrowserUiState(
     val uploadProgress: Float = 0f,
     val uploadFileName: String = "",
     val downloadingFiles: Set<String> = emptySet(),
+    val downloadProgress: Map<String, Float> = emptyMap(),
     val isSelectionMode: Boolean = false,
     val selectedFiles: Set<String> = emptySet(),
     val showDeleteConfirmation: Boolean = false,

@@ -883,7 +883,7 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 private enum class FileType {
-    TEXT, IMAGE, UNKNOWN
+    TEXT, IMAGE, PDF, UNKNOWN
 }
 
 private fun getFileType(fileName: String): FileType {
@@ -892,6 +892,9 @@ private fun getFileType(fileName: String): FileType {
     return when {
         // Image extensions
         extension in setOf("jpg", "jpeg", "png", "gif", "bmp", "webp", "svg") -> FileType.IMAGE
+        
+        // PDF extensions
+        extension == "pdf" -> FileType.PDF
         
         // Text extensions
         extension in setOf(
@@ -916,7 +919,7 @@ private fun handleFileOpen(
     val fileType = getFileType(file.name)
     
     when (fileType) {
-        FileType.TEXT, FileType.IMAGE -> {
+        FileType.TEXT, FileType.IMAGE, FileType.PDF -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
                 val intent = Intent(context, com.grid.app.presentation.fileviewer.FileViewerActivity::class.java).apply {

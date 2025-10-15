@@ -103,6 +103,11 @@ dependencies {
     
     // Image Loading
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+    
+    // Video Playback
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.ui)
     
     // Network Protocols
     implementation(libs.smbj)

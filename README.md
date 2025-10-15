@@ -10,9 +10,11 @@ A modern Android application for browsing and managing files on remote servers t
 - **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
-- **File Opening**: Open text, image, PDF, and audio files with built-in viewers (text editor, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player)
+- **File Opening**: Open text, image, PDF, audio, and video files with built-in viewers (text editor, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player)
 - **PDF Viewer**: Native PDF viewing with page navigation, high-resolution rendering, pinch-to-zoom, and pan support
 - **Audio Player**: Built-in audio player with play/pause/stop controls, progress tracking, and time display
+- **Video Player**: Native video playback with ExoPlayer integration supporting MP4, AVI, MKV, MOV, and other formats
+- **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
 - **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations (auto-exits on download start)
 - **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling
@@ -21,7 +23,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
 - **Navigation**: Proper back button handling with directory-level navigation (no more jumping to root)
 - **Progress Animation**: Real-time wavy progress indicators showing actual download progress with unified track design (wavy progress + flat remaining)
-- **File Type Icons**: Intelligent file icons based on extension (PDF, images, audio, text files)
+- **File Type Icons**: Intelligent file icons based on extension (PDF, images, audio, video, text files)
 - **Pull-to-Refresh**: Material 3 pull-to-refresh functionality for refreshing file listings
 - **Biometric Authentication**: Secure biometric unlock for connections with auto-authentication
 - **Connection Reordering**: Move up/down buttons in connection menu for custom ordering
@@ -38,7 +40,6 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### 🚧 In Development
 - Directory download support with recursive file extraction
-- Additional file type viewers (video)
 - File search and filtering capabilities
 
 ## Features
@@ -173,7 +174,8 @@ For biometric authentication (optional):
 - Upload files from device with real-time progress indicators
 - Create, rename, and delete files/folders with confirmation dialogs
 - Multi-select mode for batch operations
-- Open text, image, and PDF files with built-in viewers featuring pinch-to-zoom and pan gestures
+- Open text, image, PDF, audio, and video files with built-in viewers featuring pinch-to-zoom and pan gestures
+- Play animated GIFs with automatic animation and zoom support
 - Sort files by name, type, or modification date
 
 ## Development

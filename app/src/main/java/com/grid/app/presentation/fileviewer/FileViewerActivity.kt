@@ -5,9 +5,14 @@ import android.graphics.pdf.PdfRenderer
 import android.media.MediaPlayer
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.PlayerView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import coil.compose.AsyncImage
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -36,6 +41,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.platform.LocalContext
 import android.graphics.BitmapFactory
 import com.grid.app.presentation.theme.GridTheme
 import com.grid.app.presentation.components.LoadingView
@@ -137,6 +143,12 @@ fun FileViewerContent(
                 modifier = modifier
             )
         }
+        "VIDEO" -> {
+            VideoPlayer(
+                file = file,
+                modifier = modifier
+            )
+        }
         else -> {
             Box(
                 modifier = modifier.fillMaxSize(),
@@ -153,9 +165,6 @@ private fun ImageViewer(
     file: File,
     modifier: Modifier = Modifier
 ) {
-    var imageBitmap by remember { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    
     // Zoom and pan state
     var scale by remember { mutableStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -165,54 +174,32 @@ private fun ImageViewer(
         offset += panChange
     }
     
-    LaunchedEffect(file) {
-        try {
-            val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-            imageBitmap = bitmap?.asImageBitmap()
-        } catch (e: Exception) {
-            error = "Error loading image: ${e.message}"
-        }
-    }
-    
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        when {
-            error != null -> {
-                Text(
-                    text = error!!,
-                    color = MaterialTheme.colorScheme.error
+        AsyncImage(
+            model = file,
+            contentDescription = file.name,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
                 )
-            }
-            imageBitmap != null -> {
-                Image(
-                    bitmap = imageBitmap!!,
-                    contentDescription = file.name,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer(
-                            scaleX = scale,
-                            scaleY = scale,
-                            translationX = offset.x,
-                            translationY = offset.y
-                        )
-                        .transformable(transformableState)
-                        .pointerInput(Unit) {
-                            detectTapGestures(
-                                onDoubleTap = {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                }
-                            )
-                        },
-                    contentScale = ContentScale.Fit
-                )
-            }
-            else -> {
-                CircularProgressIndicator()
-            }
-        }
+                .transformable(transformableState)
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onDoubleTap = {
+                            scale = 1f
+                            offset = Offset.Zero
+                        }
+                    )
+                },
+            contentScale = ContentScale.Fit
+        )
     }
 }
 
@@ -609,6 +596,84 @@ private fun AudioPlayer(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VideoPlayer(
+    file: File,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var exoPlayer by remember { mutableStateOf<ExoPlayer?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Initialize ExoPlayer
+    LaunchedEffect(file) {
+        try {
+            val player = ExoPlayer.Builder(context).build()
+            val mediaItem = MediaItem.fromUri(file.toURI().toString())
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            
+            exoPlayer = player
+            isLoading = false
+        } catch (e: Exception) {
+            error = "Error loading video: ${e.message}"
+            isLoading = false
+        }
+    }
+
+    // Cleanup
+    DisposableEffect(file) {
+        onDispose {
+            exoPlayer?.release()
+        }
+    }
+
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        when {
+            isLoading -> {
+                CircularProgressIndicator()
+            }
+            error != null -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Video error",
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = error!!,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            exoPlayer != null -> {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        PlayerView(context).apply {
+                            player = exoPlayer
+                            useController = true
+                            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                        }
+                    }
+                )
+            }
+            else -> {
+                Text("No video content to display")
             }
         }
     }

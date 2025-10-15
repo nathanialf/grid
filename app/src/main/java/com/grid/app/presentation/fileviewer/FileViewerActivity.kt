@@ -288,12 +288,36 @@ private fun PdfViewer(
             withContext(Dispatchers.IO) {
                 try {
                     val page = renderer.openPage(currentPage)
+                    
+                    // Use higher resolution for better text rendering
+                    val scaleFactor = 3f
+                    val width = (page.width * scaleFactor).toInt()
+                    val height = (page.height * scaleFactor).toInt()
+                    
                     val bitmap = Bitmap.createBitmap(
-                        page.width * 2, // Higher resolution
-                        page.height * 2,
+                        width,
+                        height,
                         Bitmap.Config.ARGB_8888
                     )
-                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    
+                    // Set bitmap density for better text rendering
+                    bitmap.density = android.util.DisplayMetrics.DENSITY_XHIGH
+                    
+                    // Fill bitmap with white background to avoid transparency issues
+                    bitmap.eraseColor(android.graphics.Color.WHITE)
+                    
+                    // Create transform matrix for higher resolution
+                    val matrix = android.graphics.Matrix()
+                    matrix.setScale(scaleFactor, scaleFactor)
+                    
+                    // Try RENDER_MODE_FOR_PRINT first for better text quality
+                    try {
+                        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
+                    } catch (printException: Exception) {
+                        // Fallback to display mode if print mode fails
+                        page.render(bitmap, null, matrix, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    }
+                    
                     page.close()
                     
                     withContext(Dispatchers.Main) {

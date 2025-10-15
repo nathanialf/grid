@@ -424,4 +424,36 @@ class FileRepositoryImpl @Inject constructor(
             _activeTransfers.value = currentTransfers
         }
     }
+    
+    override suspend fun getFiles(connection: Connection, path: String): List<RemoteFile> {
+        return listFiles(connection, path)
+    }
+    
+    override suspend fun downloadFileToTemp(connection: Connection, file: RemoteFile): File {
+        val credential = credentialRepository.getCredentialById(connection.credentialId)
+        val client = networkClientFactory.createClient(connection.protocol)
+        
+        when (val connectResult = client.connect(connection, credential)) {
+            is Result.Success -> {
+                // Create temporary file
+                val tempDir = File(System.getProperty("java.io.tmpdir"), "grid_documents")
+                if (!tempDir.exists()) {
+                    tempDir.mkdirs()
+                }
+                
+                val tempFile = File(tempDir, "${System.currentTimeMillis()}_${file.name}")
+                
+                // Download file using OutputStream
+                FileOutputStream(tempFile).use { outputStream ->
+                    client.downloadFile(file.path, outputStream).collect { _ ->
+                        // We can ignore progress for this use case
+                    }
+                }
+                
+                return tempFile
+            }
+            is Result.Error -> throw connectResult.exception
+            is Result.Loading -> throw Exception("Unexpected loading state")
+        }
+    }
 }

@@ -11,6 +11,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
 - **File Opening**: Open text, image, PDF, audio, and video files with built-in viewers (text editor, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player)
+- **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
 - **Audio Player**: Built-in audio player with play/pause/stop controls, progress tracking, and time display
 - **Video Player**: Native video playback with ExoPlayer integration supporting MP4, AVI, MKV, MOV, and other formats
@@ -176,6 +177,7 @@ For biometric authentication (optional):
 - Multi-select mode for batch operations
 - Open text, image, PDF, audio, and video files with built-in viewers featuring pinch-to-zoom and pan gestures
 - Play animated GIFs with automatic animation and zoom support
+- Access Grid files through other apps' file pickers via DocumentsProvider integration
 - Sort files by name, type, or modification date
 
 ## Development

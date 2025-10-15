@@ -28,7 +28,12 @@ class ConnectionRepositoryImpl @Inject constructor(
     
     override suspend fun insertConnection(connection: Connection) {
         val currentConnections = preferencesManager.getConnections().first().toMutableList()
-        currentConnections.add(connection)
+        
+        // Assign the next highest order to put new connection last
+        val maxOrder = currentConnections.maxOfOrNull { it.order } ?: -1
+        val connectionWithOrder = connection.copy(order = maxOrder + 1)
+        
+        currentConnections.add(connectionWithOrder)
         preferencesManager.saveConnections(currentConnections)
     }
     
@@ -53,7 +58,10 @@ class ConnectionRepositoryImpl @Inject constructor(
             if (existingIndex >= 0) {
                 currentConnections[existingIndex] = connection
             } else {
-                currentConnections.add(connection)
+                // Assign the next highest order to put new connection last
+                val maxOrder = currentConnections.maxOfOrNull { it.order } ?: -1
+                val connectionWithOrder = connection.copy(order = maxOrder + 1)
+                currentConnections.add(connectionWithOrder)
             }
             
             preferencesManager.saveConnections(currentConnections)

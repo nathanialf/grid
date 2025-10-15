@@ -44,6 +44,18 @@
             android:exported="false"
             android:theme="@style/Theme.Grid" />
             
+        <!-- Documents Provider for file picker integration -->
+        <provider
+            android:name=".data.provider.GridDocumentsProvider"
+            android:authorities="com.grid.app.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+            
     </application>
 
 </manifest>

@@ -11,6 +11,7 @@ interface FileRepository {
     
     suspend fun listFiles(connectionId: String, path: String): Result<List<RemoteFile>>
     suspend fun listFiles(connection: Connection, path: String): List<RemoteFile>
+    suspend fun getFiles(connection: Connection, path: String): List<RemoteFile>
     suspend fun createDirectory(connectionId: String, path: String): Result<Unit>
     suspend fun createDirectory(connection: Connection, directoryPath: String)
     suspend fun deleteFile(connectionId: String, path: String): Result<Unit>
@@ -27,6 +28,8 @@ interface FileRepository {
     suspend fun downloadFile(connection: Connection, file: RemoteFile, localPath: String)
     
     suspend fun downloadFileWithProgress(connection: Connection, file: RemoteFile, localPath: String): Flow<FileTransfer>
+    
+    suspend fun downloadFileToTemp(connection: Connection, file: RemoteFile): java.io.File
     
     suspend fun uploadFile(
         connectionId: String,

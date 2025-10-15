@@ -17,7 +17,7 @@ class SimpleConnectionListViewModel @Inject constructor() : ViewModel() {
         // TODO: Implement when dependencies are fixed
     }
 
-    fun deleteConnection(connectionId: String) {
+    fun deleteConnection() {
         // TODO: Implement when dependencies are fixed
     }
 }

@@ -15,8 +15,6 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SimpleConnectionListScreen(
     onNavigateToAddConnection: () -> Unit,
-    onNavigateToEditConnection: (String) -> Unit,
-    onNavigateToFileBrowser: (String) -> Unit,
     onNavigateToSettings: () -> Unit
 ) {
     Scaffold(

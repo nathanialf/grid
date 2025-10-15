@@ -6,6 +6,8 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### ✅ Working Features
 - **SMB/CIFS**: Successfully connects to Windows shares and SMB servers with full file browsing
+- **FTP**: File Transfer Protocol with reliable connection and file operations
+- **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
 - **File Opening**: Open text and image files with built-in viewers (text editor, image viewer)
@@ -28,12 +30,9 @@ A modern Android application for browsing and managing files on remote servers t
 - **About Section**: Developer information with clickable website link and version info
 
 ### ⚠️ Known Issues
-- **SFTP**: Connection failures with cryptography provider issues - not currently functional
-- **FTP**: Connection timeout and stability issues - not currently functional
 - **Directory Downloads**: Directory downloads are skipped (files only for now)
 
 ### 🚧 In Development
-- SFTP and FTP protocol stability improvements
 - Directory download support with recursive file extraction
 - Additional file type viewers (PDF, video, audio)
 - File search and filtering capabilities
@@ -42,8 +41,8 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### Protocol Support
 - **SMB** - Server Message Block for Windows file sharing (✅ Fully functional)
-- **FTP** - File Transfer Protocol with secure authentication (❌ Currently broken)
-- **SFTP** - SSH File Transfer Protocol with key-based authentication (❌ Currently broken)
+- **FTP** - File Transfer Protocol with secure authentication (✅ Fully functional)
+- **SFTP** - SSH File Transfer Protocol with password authentication (✅ Fully functional)
 
 ### Security & Storage
 - **Encrypted Credentials** - Android Keystore integration for secure credential storage

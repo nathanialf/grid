@@ -4,7 +4,7 @@ import com.grid.app.domain.model.Result
 import javax.inject.Inject
 
 class MockDeleteConnectionUseCase @Inject constructor() {
-    suspend operator fun invoke(connectionId: String): Result<Unit> {
+    suspend operator fun invoke(): Result<Unit> {
         return Result.Success(Unit)
     }
 }

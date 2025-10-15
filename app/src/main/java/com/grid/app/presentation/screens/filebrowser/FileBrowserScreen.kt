@@ -17,6 +17,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -147,22 +150,24 @@ fun FileBrowserScreen(
                         }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
                 },
                 actions = {
-                    // Sort dropdown
-                    var expanded by remember { mutableStateOf(false) }
-                    
-                    Box {
-                        IconButton(onClick = { expanded = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Sort,
-                                contentDescription = "Sort"
-                            )
-                        }
+                    // Only show sort dropdown when not loading
+                    if (!uiState.isLoading) {
+                        // Sort dropdown
+                        var expanded by remember { mutableStateOf(false) }
+                        
+                        Box {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = "Sort"
+                                )
+                            }
                         
                         DropdownMenu(
                             expanded = expanded,
@@ -207,12 +212,13 @@ fun FileBrowserScreen(
                             )
                         }
                     }
+                    }
                 }
             )
         },
         floatingActionButton = {
-            // Hide the floating toolbar when uploading to prevent covering the progress popup
-            if (!uiState.isUploading) {
+            // Hide the floating toolbar when uploading or loading to prevent UI clutter
+            if (!uiState.isUploading && !uiState.isLoading) {
                 Card(
                     modifier = Modifier.padding(bottom = 16.dp),
                     shape = RoundedCornerShape(32.dp),
@@ -811,7 +817,7 @@ private fun FileItem(
             }
             
             Icon(
-                imageVector = if (file.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile,
+                imageVector = if (file.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
                 contentDescription = if (file.isDirectory) "Directory" else "File",
                 tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1014,7 +1020,7 @@ private fun FileGridItem(
                 verticalArrangement = Arrangement.Center
             ) {
                 Icon(
-                    imageVector = if (file.isDirectory) Icons.Default.Folder else Icons.Default.InsertDriveFile,
+                    imageVector = if (file.isDirectory) Icons.Default.Folder else Icons.AutoMirrored.Filled.InsertDriveFile,
                     contentDescription = if (file.isDirectory) "Directory" else "File",
                     modifier = Modifier.size(if (file.isDirectory) 40.dp else 32.dp),
                     tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant

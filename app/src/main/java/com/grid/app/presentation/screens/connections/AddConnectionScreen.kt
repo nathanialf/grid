@@ -8,6 +8,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,7 +51,7 @@ fun AddConnectionScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -116,7 +118,7 @@ fun EditConnectionScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
@@ -178,7 +180,7 @@ private fun ConnectionForm(
             onValueChange = { onFormDataChange(formData.copy(name = it)) },
             label = { Text("Connection Name") },
             leadingIcon = {
-                Icon(Icons.Default.Label, contentDescription = null)
+                Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null)
             },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true

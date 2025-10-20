@@ -15,7 +15,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
-- **Ebook Viewer**: EPUB ebook reader with chapter navigation, reading position persistence, themed dark/light mode support, working images, and immersive reading experience with auto-hiding controls
+- **Ebook Viewer**: Advanced EPUB ebook reader with HorizontalPager chapter navigation, swipe gestures, reading position persistence with scroll preservation, comprehensive text formatting (bold, italic, underline, strikethrough, superscript, subscript, code highlighting), working images with native rendering, and immersive reading experience with auto-hiding controls
 - **Markdown Viewer**: Rich markdown rendering with proper formatting, headers, links, and theme-aware styling
 - **Audio Player**: Enhanced audio player with metadata display (title, album, artist, year), wavy scrubbing progress bar, circular play button, auto-play functionality, and Android media notifications with seamless notification-to-app transitions
 - **Video Player**: Custom video player with ExoPlayer integration, wavy progress bar scrubbing, auto-hiding controls, pinch-to-zoom support, and Android media notifications with seamless playback state preservation
@@ -193,7 +193,7 @@ For biometric authentication (optional):
 - Upload files from device with real-time progress indicators
 - Create, rename, and delete files/folders with confirmation dialogs
 - Multi-select mode for batch operations
-- Open text, image, PDF, audio, video, archive, ebook, and markdown files with built-in viewers featuring smooth keyboard scrolling for text editing, pinch-to-zoom and pan gestures, EPUB ebook reading with chapter navigation and position saving, and rich markdown rendering
+- Open text, image, PDF, audio, video, archive, ebook, and markdown files with built-in viewers featuring smooth keyboard scrolling for text editing, pinch-to-zoom and pan gestures, advanced EPUB ebook reading with swipe navigation, rich text formatting, image support, scroll position preservation, and rich markdown rendering
 - Extract archive files (ZIP, RAR, 7-Zip, TAR, GZIP) with real-time progress tracking and automatic server upload
 - Play animated GIFs with automatic animation and zoom support
 - Access Grid files through other apps' file pickers via DocumentsProvider integration

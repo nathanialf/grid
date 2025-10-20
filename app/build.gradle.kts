@@ -132,6 +132,7 @@ dependencies {
     
     // EPUB Handling
     implementation("org.jsoup:jsoup:1.17.2") // For HTML parsing in EPUB and ZIP handling
+    implementation("androidx.compose.foundation:foundation:1.7.6") // For HorizontalPager
     
     // Testing
     testImplementation(libs.junit)

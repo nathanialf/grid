@@ -1,16 +1,14 @@
 package com.grid.app.presentation.fileviewer.composables
 
-import android.util.Base64
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.view.MotionEvent
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -21,17 +19,25 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.delay
 import com.grid.app.presentation.fileviewer.ebook.EbookViewModel
 import com.grid.app.presentation.fileviewer.ebook.EbookUiState
+import com.grid.app.presentation.fileviewer.ebook.HtmlToCompose
+import android.util.Base64
+import coil.compose.AsyncImage
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import android.graphics.BitmapFactory
 import java.io.File
 
 @Composable
@@ -125,10 +131,12 @@ fun EbookViewer(
             is EbookUiState.Success -> {
                 val successState = uiState as EbookUiState.Success
                 
-                // Ebook content with tap detection
-                EbookContent(
+                EbookPagerContent(
                     bookInfo = successState.bookInfo,
                     currentChapterIndex = successState.currentChapterIndex,
+                    scrollOffset = successState.scrollOffset,
+                    onChapterChanged = viewModel::navigateToChapter,
+                    onScrollPositionChanged = viewModel::updateScrollPosition,
                     onTap = { isNavigationVisible = !isNavigationVisible },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -172,140 +180,214 @@ fun EbookViewer(
 }
 
 @Composable
-fun EbookContent(
+fun EbookPagerContent(
     bookInfo: com.grid.app.presentation.fileviewer.ebook.EpubBookInfo,
     currentChapterIndex: Int,
+    scrollOffset: Float,
+    onChapterChanged: (Int) -> Unit,
+    onScrollPositionChanged: (Float) -> Unit,
     onTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val currentChapter = bookInfo.chapters.getOrNull(currentChapterIndex)
-    val backgroundColor = MaterialTheme.colorScheme.surface
-    val textColor = MaterialTheme.colorScheme.onSurface
+    val pagerState = rememberPagerState(
+        initialPage = currentChapterIndex,
+        pageCount = { bookInfo.totalChapters }
+    )
     
-    if (currentChapter != null) {
-        AndroidView(
-            modifier = modifier.fillMaxSize(),
-            factory = { context ->
-                WebView(context).apply {
-                    webViewClient = WebViewClient()
-                    
-                    settings.apply {
-                        javaScriptEnabled = false
-                        loadWithOverviewMode = true
-                        useWideViewPort = true
-                        builtInZoomControls = true
-                        displayZoomControls = false
+    // Sync pager state with ViewModel
+    LaunchedEffect(currentChapterIndex) {
+        if (pagerState.currentPage != currentChapterIndex) {
+            pagerState.animateScrollToPage(currentChapterIndex)
+        }
+    }
+    
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != currentChapterIndex) {
+            onChapterChanged(pagerState.currentPage)
+        }
+    }
+    
+    HorizontalPager(
+        state = pagerState,
+        modifier = modifier,
+        pageSpacing = 16.dp
+    ) { pageIndex ->
+        val chapter = bookInfo.chapters.getOrNull(pageIndex)
+        
+        if (chapter != null) {
+            ChapterContent(
+                chapter = chapter,
+                bookInfo = bookInfo,
+                scrollOffset = if (pageIndex == currentChapterIndex) scrollOffset else 0f,
+                onScrollPositionChanged = { offset ->
+                    if (pageIndex == currentChapterIndex) {
+                        onScrollPositionChanged(offset)
                     }
-                    
-                    // Set background color to match theme
-                    setBackgroundColor(backgroundColor.toArgb())
-                    
-                    // Handle touch events to detect taps without interfering with scrolling
-                    var startY = 0f
-                    var startTime = 0L
-                    setOnTouchListener { _, event ->
-                        when (event.action) {
-                            MotionEvent.ACTION_DOWN -> {
-                                startY = event.y
-                                startTime = System.currentTimeMillis()
-                                false // Let WebView handle the event
-                            }
-                            MotionEvent.ACTION_UP -> {
-                                val endY = event.y
-                                val endTime = System.currentTimeMillis()
-                                val deltaY = kotlin.math.abs(endY - startY)
-                                val deltaTime = endTime - startTime
-                                
-                                // Only trigger tap if it's a quick tap without much movement
-                                if (deltaY < 50 && deltaTime < 300) {
-                                    onTap()
-                                }
-                                false // Let WebView handle the event
-                            }
-                            else -> false // Let WebView handle all other events
-                        }
-                    }
-                }
+                },
+                onTap = onTap,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+            )
+        }
+    }
+}
+
+@Composable
+fun ChapterContent(
+    chapter: com.grid.app.presentation.fileviewer.ebook.EpubChapter,
+    bookInfo: com.grid.app.presentation.fileviewer.ebook.EpubBookInfo,
+    scrollOffset: Float,
+    onScrollPositionChanged: (Float) -> Unit,
+    onTap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val lazyListState = rememberLazyListState()
+    val htmlToCompose = com.grid.app.presentation.fileviewer.ebook.HtmlToCompose
+    
+    // Parse HTML to get both text and images
+    val parsedContent = htmlToCompose.parseHtmlToContent(chapter.content)
+    
+    // Restore scroll position
+    LaunchedEffect(scrollOffset) {
+        if (scrollOffset > 0 && lazyListState.firstVisibleItemIndex == 0 && lazyListState.firstVisibleItemScrollOffset == 0) {
+            lazyListState.scrollToItem(0, scrollOffset.toInt())
+        }
+    }
+    
+    // Save scroll position
+    LaunchedEffect(lazyListState.firstVisibleItemIndex, lazyListState.firstVisibleItemScrollOffset) {
+        val offset = if (lazyListState.firstVisibleItemIndex == 0) {
+            lazyListState.firstVisibleItemScrollOffset.toFloat()
+        } else {
+            lazyListState.firstVisibleItemIndex * 1000f + lazyListState.firstVisibleItemScrollOffset
+        }
+        onScrollPositionChanged(offset)
+    }
+    
+    LazyColumn(
+        state = lazyListState,
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onTap() }
+                )
             },
-            update = { webView ->
-                // Update background color when theme changes
-                webView.setBackgroundColor(backgroundColor.toArgb())
-                
-                // Process chapter content to replace image sources with data URLs
-                var processedContent = currentChapter.content
-                
-                // Replace image sources with data URLs
-                bookInfo.imagePaths.forEach { (imagePath, imageData) ->
-                    val mimeType = when {
-                        imagePath.endsWith(".png", ignoreCase = true) -> "image/png"
-                        imagePath.endsWith(".jpg", ignoreCase = true) || imagePath.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
-                        imagePath.endsWith(".gif", ignoreCase = true) -> "image/gif"
-                        imagePath.endsWith(".svg", ignoreCase = true) -> "image/svg+xml"
-                        imagePath.endsWith(".webp", ignoreCase = true) -> "image/webp"
-                        else -> "image/png"
-                    }
-                    
-                    val base64Image = Base64.encodeToString(imageData, Base64.NO_WRAP)
-                    val dataUrl = "data:$mimeType;base64,$base64Image"
-                    
-                    // Replace various possible image source patterns
-                    processedContent = processedContent.replace("src=\"$imagePath\"", "src=\"$dataUrl\"")
-                    processedContent = processedContent.replace("src='$imagePath'", "src='$dataUrl'")
-                    // Also handle relative paths that might include ../ or ./
-                    val filename = imagePath.substringAfterLast('/')
-                    processedContent = processedContent.replace("src=\"$filename\"", "src=\"$dataUrl\"")
-                    processedContent = processedContent.replace("src='$filename'", "src='$dataUrl'")
-                    // Handle paths that might have ../ prefixes
-                    processedContent = processedContent.replace("src=\"../$imagePath\"", "src=\"$dataUrl\"")
-                    processedContent = processedContent.replace("src='../$imagePath'", "src='$dataUrl'")
-                    processedContent = processedContent.replace("src=\"./$imagePath\"", "src=\"$dataUrl\"")
-                    processedContent = processedContent.replace("src='./$imagePath'", "src='$dataUrl'")
+        contentPadding = PaddingValues(vertical = 16.dp)
+    ) {
+        // Split content by images to create alternating text/image sections
+        val textParts = splitTextByImages(parsedContent)
+        
+        items(textParts) { contentPart ->
+            when (contentPart) {
+                is ContentPart.TextPart -> {
+                    androidx.compose.material3.Text(
+                        text = contentPart.text,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 18.sp,
+                            lineHeight = 28.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
-                
-                // Generate themed HTML content
-                val styledHtml = """
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <style>
-                            body {
-                                font-family: serif;
-                                font-size: 18px;
-                                line-height: 1.6;
-                                margin: 16px;
-                                color: ${String.format("#%06X", textColor.toArgb() and 0xFFFFFF)};
-                                background-color: ${String.format("#%06X", backgroundColor.toArgb() and 0xFFFFFF)};
-                            }
-                            h1, h2, h3, h4, h5, h6 {
-                                font-family: sans-serif;
-                                margin-top: 24px;
-                                margin-bottom: 16px;
-                                color: ${String.format("#%06X", textColor.toArgb() and 0xFFFFFF)};
-                            }
-                            p {
-                                margin-bottom: 16px;
-                                text-align: justify;
-                            }
-                            img {
-                                max-width: 100%;
-                                height: auto;
-                                display: block;
-                                margin: 16px auto;
-                            }
-                            a {
-                                color: ${String.format("#%06X", textColor.toArgb() and 0xFFFFFF)};
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        $processedContent
-                    </body>
-                    </html>
-                """.trimIndent()
-                
-                webView.loadDataWithBaseURL(null, styledHtml, "text/html", "UTF-8", null)
+                is ContentPart.ImagePart -> {
+                    EbookImage(
+                        imageInfo = contentPart.imageInfo,
+                        bookInfo = bookInfo,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    )
+                }
             }
+        }
+    }
+}
+
+// Data classes for content parts
+sealed class ContentPart {
+    data class TextPart(val text: AnnotatedString) : ContentPart()
+    data class ImagePart(val imageInfo: com.grid.app.presentation.fileviewer.ebook.ImageInfo) : ContentPart()
+}
+
+// Function to split text content by images
+private fun splitTextByImages(parsedContent: com.grid.app.presentation.fileviewer.ebook.ParsedContent): List<ContentPart> {
+    val result = mutableListOf<ContentPart>()
+    val text = parsedContent.text
+    val images = parsedContent.images.sortedBy { it.positionInText }
+    
+    var lastPosition = 0
+    
+    for (image in images) {
+        // Add text before image
+        if (image.positionInText > lastPosition) {
+            val textPart = text.subSequence(lastPosition, image.positionInText)
+            if (textPart.isNotEmpty()) {
+                result.add(ContentPart.TextPart(textPart))
+            }
+        }
+        
+        // Add image
+        result.add(ContentPart.ImagePart(image))
+        
+        // Skip the placeholder text in the original string
+        val placeholder = image.alt?.let { "[$it]" } ?: "[Image]"
+        lastPosition = image.positionInText + placeholder.length
+    }
+    
+    // Add remaining text
+    if (lastPosition < text.length) {
+        val textPart = text.subSequence(lastPosition, text.length)
+        if (textPart.isNotEmpty()) {
+            result.add(ContentPart.TextPart(textPart))
+        }
+    }
+    
+    return result
+}
+
+@Composable
+fun EbookImage(
+    imageInfo: com.grid.app.presentation.fileviewer.ebook.ImageInfo,
+    bookInfo: com.grid.app.presentation.fileviewer.ebook.EpubBookInfo,
+    modifier: Modifier = Modifier
+) {
+    // Try to find the image in the book's image data
+    val imageData = bookInfo.imagePaths[imageInfo.src] 
+        ?: bookInfo.imagePaths[imageInfo.src.substringAfterLast('/')]
+    
+    if (imageData != null) {
+        val bitmap = remember(imageData) {
+            BitmapFactory.decodeByteArray(imageData, 0, imageData.size)
+        }
+        
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = imageInfo.alt,
+                modifier = modifier
+                    .wrapContentHeight()
+                    .padding(vertical = 8.dp)
+            )
+        } else {
+            // Fallback text if bitmap decoding fails
+            Text(
+                text = imageInfo.alt ?: "[Image]",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = modifier.padding(vertical = 8.dp)
+            )
+        }
+    } else {
+        // Fallback text if image not found
+        Text(
+            text = imageInfo.alt ?: "[Image: ${imageInfo.src}]",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = modifier.padding(vertical = 8.dp)
         )
     }
 }

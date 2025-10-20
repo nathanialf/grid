@@ -15,10 +15,12 @@ import com.grid.app.data.repository.ConnectionRepositoryImpl
 import com.grid.app.data.repository.CredentialRepositoryImpl
 import com.grid.app.data.repository.FileRepositoryImpl
 import com.grid.app.data.repository.SettingsRepositoryImpl
+import com.grid.app.data.local.EbookRepositoryImpl
 import com.grid.app.domain.repository.ConnectionRepository
 import com.grid.app.domain.repository.CredentialRepository
 import com.grid.app.domain.repository.FileRepository
 import com.grid.app.domain.repository.SettingsRepository
+import com.grid.app.domain.repository.EbookRepository
 import com.grid.app.domain.usecase.connection.GetAllConnectionsUseCase
 import com.grid.app.domain.usecase.connection.DeleteConnectionUseCase
 import com.grid.app.domain.usecase.connection.CreateConnectionUseCase
@@ -115,6 +117,11 @@ abstract class RepositoryModule {
     abstract fun bindSettingsRepository(
         settingsRepositoryImpl: SettingsRepositoryImpl
     ): SettingsRepository
+    
+    @Binds
+    abstract fun bindEbookRepository(
+        ebookRepositoryImpl: EbookRepositoryImpl
+    ): EbookRepository
 }
 
 @Module

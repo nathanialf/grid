@@ -19,7 +19,7 @@ fun FileContentRouter(
     onExitEditor: () -> Unit = {}
 ) {
     when (fileType) {
-        "TEXT", "CODE", "MARKDOWN" -> {
+        "TEXT", "CODE" -> {
             if (isEditMode) {
                 TextEditor(
                     file = file,
@@ -30,6 +30,23 @@ fun FileContentRouter(
                 )
             } else {
                 TextViewer(
+                    file = file,
+                    modifier = modifier
+                )
+            }
+        }
+        
+        "MARKDOWN" -> {
+            if (isEditMode) {
+                TextEditor(
+                    file = file,
+                    modifier = modifier,
+                    onSave = onSaveFile,
+                    onExit = onExitEditor,
+                    onActionsChanged = onEditorActionsChanged
+                )
+            } else {
+                MarkdownViewer(
                     file = file,
                     modifier = modifier
                 )
@@ -75,6 +92,13 @@ fun FileContentRouter(
                 file = file,
                 modifier = modifier,
                 onActionsChanged = onArchiveActionsChanged
+            )
+        }
+        
+        "EBOOK" -> {
+            EbookViewer(
+                file = file,
+                modifier = modifier
             )
         }
         

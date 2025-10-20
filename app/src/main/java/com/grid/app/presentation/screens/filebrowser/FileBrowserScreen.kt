@@ -21,6 +21,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -910,7 +911,7 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 private enum class FileType {
-    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, ARCHIVE, UNKNOWN
+    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, ARCHIVE, EBOOK, UNKNOWN
 }
 
 private fun getFileType(fileName: String): FileType {
@@ -931,6 +932,9 @@ private fun getFileType(fileName: String): FileType {
         
         // Archive extensions
         extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> FileType.ARCHIVE
+        
+        // Ebook extensions
+        extension in setOf("epub", "mobi", "azw", "azw3", "fb2", "lit") -> FileType.EBOOK
         
         // Markdown extensions
         extension in setOf("md", "markdown") -> FileType.MARKDOWN
@@ -975,6 +979,9 @@ private fun getFileIcon(fileName: String): ImageVector {
         // Archive files
         extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> Icons.Default.Archive
         
+        // Ebook files
+        extension in setOf("epub", "mobi", "azw", "azw3", "fb2", "lit") -> Icons.AutoMirrored.Filled.MenuBook
+        
         // Text files
         extension in setOf("txt", "md", "json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
             "cpp", "c", "h", "cs", "php", "rb", "go", "rs", "swift", "yml", "yaml", "toml",
@@ -999,7 +1006,7 @@ private fun handleFileOpen(
     val fileType = getFileType(file.name)
     
     when (fileType) {
-        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO, FileType.ARCHIVE -> {
+        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO, FileType.ARCHIVE, FileType.EBOOK -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
                 val intent = Intent(context, com.grid.app.presentation.fileviewer.FileViewerActivity::class.java).apply {

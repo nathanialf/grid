@@ -130,6 +130,9 @@ dependencies {
     implementation("com.github.junrar:junrar:7.5.5")
     implementation("org.tukaani:xz:1.9")
     
+    // EPUB Handling
+    implementation("org.jsoup:jsoup:1.17.2") // For HTML parsing in EPUB and ZIP handling
+    
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -10,11 +10,13 @@ A modern Android application for browsing and managing files on remote servers t
 - **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
-- **File Opening**: Open text, image, PDF, audio, video, and archive files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player, archive viewer)
+- **File Opening**: Open text, image, PDF, audio, video, archive, and ebook files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player, archive viewer, ebook viewer with chapter navigation)
 - **Archive Viewer**: Browse and extract ZIP, RAR, 7-Zip, TAR, and GZIP archives with hierarchical tree navigation, file metadata display, and one-click extraction with progress tracking
 - **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
+- **Ebook Viewer**: EPUB ebook reader with chapter navigation, reading position persistence, themed dark/light mode support, working images, and immersive reading experience with auto-hiding controls
+- **Markdown Viewer**: Rich markdown rendering with proper formatting, headers, links, and theme-aware styling
 - **Audio Player**: Enhanced audio player with metadata display (title, album, artist, year), wavy scrubbing progress bar, circular play button, auto-play functionality, and Android media notifications with seamless notification-to-app transitions
 - **Video Player**: Custom video player with ExoPlayer integration, wavy progress bar scrubbing, auto-hiding controls, pinch-to-zoom support, and Android media notifications with seamless playback state preservation
 - **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
@@ -105,6 +107,10 @@ app/src/main/java/com/grid/app/
 - **Junrar** - RAR archive support
 - **XZ for Java** - LZMA/XZ compression support
 
+### Document & Content Libraries
+- **JSoup** - HTML parsing and processing for EPUB content and image extraction
+- **Markwon** - Markdown rendering with HTML support for rich markdown viewing
+
 ## Getting Started
 
 ### Prerequisites
@@ -187,7 +193,7 @@ For biometric authentication (optional):
 - Upload files from device with real-time progress indicators
 - Create, rename, and delete files/folders with confirmation dialogs
 - Multi-select mode for batch operations
-- Open text, image, PDF, audio, video, and archive files with built-in viewers featuring smooth keyboard scrolling for text editing and pinch-to-zoom and pan gestures
+- Open text, image, PDF, audio, video, archive, ebook, and markdown files with built-in viewers featuring smooth keyboard scrolling for text editing, pinch-to-zoom and pan gestures, EPUB ebook reading with chapter navigation and position saving, and rich markdown rendering
 - Extract archive files (ZIP, RAR, 7-Zip, TAR, GZIP) with real-time progress tracking and automatic server upload
 - Play animated GIFs with automatic animation and zoom support
 - Access Grid files through other apps' file pickers via DocumentsProvider integration

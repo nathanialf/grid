@@ -418,7 +418,7 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        handleFileOpen(context, viewModel, file)
+                                        handleFileOpen(context, viewModel, file, connectionId)
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
@@ -471,7 +471,7 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        handleFileOpen(context, viewModel, file)
+                                        handleFileOpen(context, viewModel, file, connectionId)
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
@@ -974,7 +974,8 @@ private fun getFileIcon(fileName: String): ImageVector {
 private fun handleFileOpen(
     context: android.content.Context,
     viewModel: FileBrowserViewModel,
-    file: RemoteFile
+    file: RemoteFile,
+    connectionId: String?
 ) {
     val fileType = getFileType(file.name)
     
@@ -986,6 +987,8 @@ private fun handleFileOpen(
                     putExtra("file_path", tempFile.absolutePath)
                     putExtra("file_name", file.name)
                     putExtra("file_type", fileType.name)
+                    putExtra("connection_id", connectionId)
+                    putExtra("remote_path", file.path)
                 }
                 context.startActivity(intent)
             }

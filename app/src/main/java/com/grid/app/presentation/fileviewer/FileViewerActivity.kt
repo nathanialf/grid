@@ -26,7 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NavigateBefore
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,9 +49,21 @@ import android.graphics.BitmapFactory
 import com.grid.app.presentation.theme.GridTheme
 import com.grid.app.presentation.components.LoadingView
 import com.grid.app.presentation.fileviewer.composables.AudioPlayer
+import com.grid.app.presentation.fileviewer.composables.TextViewer
+import com.grid.app.presentation.fileviewer.composables.MarkdownViewer
+import com.grid.app.presentation.fileviewer.composables.TextEditor
+import com.grid.app.presentation.fileviewer.composables.TextEditorActions
+import com.grid.app.presentation.fileviewer.utils.FileUtils
+import com.grid.app.domain.usecase.file.UploadFileUseCase
+import com.grid.app.domain.usecase.connection.GetConnectionUseCase
+import com.grid.app.domain.model.Connection
+import com.grid.app.domain.repository.FileRepository
+import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import android.widget.TextView
 import java.io.File
 import kotlin.math.roundToInt
@@ -56,39 +71,172 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @AndroidEntryPoint
 class FileViewerActivity : ComponentActivity() {
+    
+    @Inject
+    lateinit var uploadFileUseCase: UploadFileUseCase
+    
+    @Inject
+    lateinit var getConnectionUseCase: GetConnectionUseCase
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         val filePath = intent.getStringExtra("file_path") ?: ""
         val fileName = intent.getStringExtra("file_name") ?: "Unknown File"
         val fileType = intent.getStringExtra("file_type") ?: "TEXT"
+        val connectionId = intent.getStringExtra("connection_id")
+        val remotePath = intent.getStringExtra("remote_path")
         
         setContent {
             GridTheme {
-                Scaffold(
-                    modifier = Modifier.fillMaxSize(),
-                    topBar = {
-                        TopAppBar(
-                            title = { Text(fileName) },
-                            navigationIcon = {
-                                IconButton(onClick = { finish() }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Back"
-                                    )
-                                }
-                            }
-                        )
-                    }
-                ) { innerPadding ->
-                    FileViewerContent(
-                        filePath = filePath,
-                        fileType = fileType,
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                FileViewerScreen(
+                    filePath = filePath,
+                    fileName = fileName,
+                    fileType = fileType,
+                    connectionId = connectionId,
+                    remotePath = remotePath,
+                    uploadFileUseCase = uploadFileUseCase,
+                    getConnectionUseCase = getConnectionUseCase,
+                    onBack = { finish() }
+                )
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FileViewerScreen(
+    filePath: String,
+    fileName: String,
+    fileType: String,
+    connectionId: String?,
+    remotePath: String?,
+    uploadFileUseCase: UploadFileUseCase,
+    getConnectionUseCase: GetConnectionUseCase,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val file = File(filePath)
+    var isEditMode by remember { mutableStateOf(false) }
+    var saveError by remember { mutableStateOf<String?>(null) }
+    var editorActions by remember { mutableStateOf<TextEditorActions?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Save error dialog
+    saveError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { saveError = null },
+            title = { Text("Save Error") },
+            text = { Text("Failed to save file: $error") },
+            confirmButton = {
+                TextButton(onClick = { saveError = null }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+    
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            TopAppBar(
+                title = { Text(fileName) },
+                navigationIcon = {
+                    if (!isEditMode) {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                    }
+                },
+                actions = {
+                    if (isEditMode && editorActions != null) {
+                        // Save button
+                        IconButton(
+                            onClick = editorActions!!.save,
+                            enabled = editorActions!!.hasUnsavedChanges && !editorActions!!.isSaving
+                        ) {
+                            if (editorActions!!.isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Save,
+                                    contentDescription = "Save file",
+                                    tint = if (editorActions!!.hasUnsavedChanges) 
+                                        MaterialTheme.colorScheme.primary 
+                                    else 
+                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                        
+                        // Exit button
+                        IconButton(onClick = editorActions!!.exit) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Exit editor",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    } else if (!isEditMode && FileUtils.isEditableFile(file)) {
+                        // Edit button for editable files
+                        IconButton(onClick = { isEditMode = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit file",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        FileViewerContent(
+            filePath = filePath,
+            fileType = fileType,
+            modifier = Modifier.padding(innerPadding),
+            isEditMode = isEditMode,
+            onEditorActionsChanged = { editorActions = it },
+            onSaveFile = { content ->
+                coroutineScope.launch {
+                    try {
+                        // First save to local file
+                        FileUtils.saveFile(file, content)
+                            .onSuccess { 
+                                // If we have connection info, upload to server
+                                if (connectionId != null && remotePath != null) {
+                                    try {
+                                        // Get the connection object and upload to server
+                                        val connection = getConnectionUseCase(connectionId)
+                                        uploadFileUseCase(connection, filePath, remotePath)
+                                        isEditMode = false
+                                    } catch (e: Exception) {
+                                        saveError = "Failed to upload to server: ${e.message}"
+                                    }
+                                } else {
+                                    // No server connection, just local save
+                                    isEditMode = false
+                                }
+                            }
+                            .onFailure { error -> 
+                                saveError = error.message 
+                            }
+                    } catch (e: Exception) {
+                        saveError = "Save failed: ${e.message}"
+                    }
+                }
+            },
+            onExitEditor = {
+                isEditMode = false
+            }
+        )
     }
 }
 
@@ -96,7 +244,11 @@ class FileViewerActivity : ComponentActivity() {
 fun FileViewerContent(
     filePath: String,
     fileType: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isEditMode: Boolean = false,
+    onEditorActionsChanged: (TextEditorActions) -> Unit = {},
+    onSaveFile: (String) -> Unit = {},
+    onExitEditor: () -> Unit = {}
 ) {
     val file = File(filePath)
     
@@ -127,22 +279,52 @@ fun FileViewerContent(
             )
         }
         "TEXT" -> {
-            TextViewer(
-                file = file,
-                modifier = modifier
-            )
+            if (isEditMode) {
+                TextEditor(
+                    file = file,
+                    modifier = modifier,
+                    onSave = onSaveFile,
+                    onExit = onExitEditor,
+                    onActionsChanged = onEditorActionsChanged
+                )
+            } else {
+                TextViewer(
+                    file = file,
+                    modifier = modifier
+                )
+            }
         }
         "CODE" -> {
-            TextViewer(
-                file = file,
-                modifier = modifier
-            )
+            if (isEditMode) {
+                TextEditor(
+                    file = file,
+                    modifier = modifier,
+                    onSave = onSaveFile,
+                    onExit = onExitEditor,
+                    onActionsChanged = onEditorActionsChanged
+                )
+            } else {
+                TextViewer(
+                    file = file,
+                    modifier = modifier
+                )
+            }
         }
         "MARKDOWN" -> {
-            MarkdownViewer(
-                file = file,
-                modifier = modifier
-            )
+            if (isEditMode) {
+                TextEditor(
+                    file = file,
+                    modifier = modifier,
+                    onSave = onSaveFile,
+                    onExit = onExitEditor,
+                    onActionsChanged = onEditorActionsChanged
+                )
+            } else {
+                MarkdownViewer(
+                    file = file,
+                    modifier = modifier
+                )
+            }
         }
         "PDF" -> {
             PdfViewer(
@@ -216,36 +398,6 @@ private fun ImageViewer(
     }
 }
 
-@Composable
-private fun TextViewer(
-    file: File,
-    modifier: Modifier = Modifier
-) {
-    var content by remember { mutableStateOf("Loading...") }
-    
-    LaunchedEffect(file) {
-        try {
-            content = file.readText()
-        } catch (e: Exception) {
-            content = "Error reading file: ${e.message}"
-        }
-    }
-    
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        Text(
-            text = content,
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            fontFamily = FontFamily.Monospace,
-            style = MaterialTheme.typography.bodyMedium
-        )
-    }
-}
 
 @Composable
 private fun PdfViewer(
@@ -534,76 +686,4 @@ private fun VideoPlayer(
 }
 
 
-@Composable
-private fun MarkdownViewer(
-    file: File,
-    modifier: Modifier = Modifier
-) {
-    var markdownText by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(true) }
-    var error by remember { mutableStateOf<String?>(null) }
-    
-    LaunchedEffect(file) {
-        try {
-            isLoading = true
-            error = null
-            markdownText = withContext(Dispatchers.IO) {
-                file.readText()
-            }
-        } catch (e: Exception) {
-            error = "Failed to load markdown file: ${e.message}"
-        } finally {
-            isLoading = false
-        }
-    }
-    
-    when {
-        isLoading -> {
-            LoadingView(modifier = modifier)
-        }
-        error != null -> {
-            Column(
-                modifier = modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(16.dp)
-                )
-            }
-        }
-        else -> {
-            AndroidView(
-                factory = { context ->
-                    TextView(context).apply {
-                        textSize = 16f
-                        setTextColor(
-                            if (context.resources.configuration.uiMode and 
-                                android.content.res.Configuration.UI_MODE_NIGHT_MASK == 
-                                android.content.res.Configuration.UI_MODE_NIGHT_YES) {
-                                android.graphics.Color.WHITE
-                            } else {
-                                android.graphics.Color.BLACK
-                            }
-                        )
-                        setPadding(32, 32, 32, 32)
-                    }
-                },
-                update = { textView ->
-                    val markwon = io.noties.markwon.Markwon.builder(textView.context)
-                        .usePlugin(io.noties.markwon.html.HtmlPlugin.create())
-                        .build()
-                    
-                    markwon.setMarkdown(textView, markdownText)
-                },
-                modifier = modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-            )
-        }
-    }
-}
 

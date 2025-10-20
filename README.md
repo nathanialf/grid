@@ -14,7 +14,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
-- **Audio Player**: Built-in audio player with play/pause/stop controls, progress tracking, and time display
+- **Audio Player**: Enhanced audio player with metadata display (title, album, artist, year), wavy scrubbing progress bar, circular play button, auto-play functionality, and Android media notifications
 - **Video Player**: Native video playback with ExoPlayer integration supporting MP4, AVI, MKV, MOV, and other formats
 - **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
 - **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
@@ -39,6 +39,8 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### ⚠️ Known Issues
 - **Directory Downloads**: Directory downloads are skipped (files only for now)
+- **Media Notification Icon**: Media notification uses generic play icon instead of app icon (system limitation)
+- **Audio Streaming**: Audio files are cached locally before playback rather than streaming directly (future enhancement)
 
 ### 🚧 In Development
 - Directory download support with recursive file extraction

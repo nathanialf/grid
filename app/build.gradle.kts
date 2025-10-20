@@ -105,9 +105,19 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
     
+    // Markdown Rendering
+    implementation("io.noties.markwon:core:4.6.2") {
+        exclude(group = "org.jetbrains", module = "annotations-java5")
+    }
+    implementation("io.noties.markwon:html:4.6.2") {
+        exclude(group = "org.jetbrains", module = "annotations-java5")
+    }
+    
     // Video Playback
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
+    implementation(libs.androidx.media3.common)
+    implementation(libs.androidx.media3.session)
     
     // Network Protocols
     implementation(libs.smbj)

@@ -898,7 +898,7 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 private enum class FileType {
-    TEXT, IMAGE, PDF, AUDIO, VIDEO, UNKNOWN
+    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, UNKNOWN
 }
 
 private fun getFileType(fileName: String): FileType {
@@ -917,12 +917,21 @@ private fun getFileType(fileName: String): FileType {
         // Video extensions
         extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> FileType.VIDEO
         
-        // Text extensions
+        // Markdown extensions
+        extension in setOf("md", "markdown") -> FileType.MARKDOWN
+        
+        // Code extensions (for syntax highlighting)
         extension in setOf(
-            "txt", "md", "json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
-            "cpp", "c", "h", "cs", "php", "rb", "go", "rs", "swift", "yml", "yaml", "toml",
-            "properties", "ini", "cfg", "conf", "log", "csv", "sql", "sh", "bat", "dockerfile",
-            "gitignore", "gradle", "makefile", "readme"
+            "js", "ts", "jsx", "tsx", "java", "kt", "py", "cpp", "c", "h", "cs", "php", 
+            "rb", "go", "rs", "swift", "css", "scss", "sass", "html", "htm", "xml", 
+            "json", "yaml", "yml", "sql", "sh", "bat", "ps1", "dockerfile", "gradle",
+            "groovy", "scala", "clj", "elm", "dart", "vue", "svelte"
+        ) -> FileType.CODE
+        
+        // Text extensions (plain text)
+        extension in setOf(
+            "txt", "properties", "ini", "cfg", "conf", "log", "csv", "toml",
+            "gitignore", "makefile", "readme", "license", "changelog"
         ) -> FileType.TEXT
         
         // Files without extension or unknown extensions - assume text
@@ -970,7 +979,7 @@ private fun handleFileOpen(
     val fileType = getFileType(file.name)
     
     when (fileType) {
-        FileType.TEXT, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO -> {
+        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
                 val intent = Intent(context, com.grid.app.presentation.fileviewer.FileViewerActivity::class.java).apply {

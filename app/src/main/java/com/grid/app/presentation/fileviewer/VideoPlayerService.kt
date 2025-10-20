@@ -16,7 +16,7 @@ import com.grid.app.presentation.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class AudioPlayerService : MediaSessionService() {
+class VideoPlayerService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var currentFilePath: String? = null
     private var currentFileName: String? = null
@@ -29,11 +29,11 @@ class AudioPlayerService : MediaSessionService() {
         // Create notification channel for media playback
         createNotificationChannel()
         
-        // Create ExoPlayer with audio attributes
+        // Create ExoPlayer with video attributes
         val player = ExoPlayer.Builder(this)
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MOVIE)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
                 true
@@ -43,22 +43,13 @@ class AudioPlayerService : MediaSessionService() {
 
         // Create MediaSession with proper notification setup
         mediaSession = MediaSession.Builder(this, player)
-            .setId("audio_session_${System.currentTimeMillis()}")
+            .setId("video_session_${System.currentTimeMillis()}")
             .setSessionActivity(createSessionActivityPendingIntent())
             .build()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
         return mediaSession
-    }
-
-    override fun onDestroy() {
-        mediaSession?.run {
-            player.release()
-            release()
-            mediaSession = null
-        }
-        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -76,16 +67,24 @@ class AudioPlayerService : MediaSessionService() {
         }
         return super.onStartCommand(intent, flags, startId)
     }
-    
+
+    override fun onDestroy() {
+        mediaSession?.run {
+            player.release()
+            release()
+            mediaSession = null
+        }
+        super.onDestroy()
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channelId = "media_playback_channel"
-            val channelName = "Media Playback"
-            val channelDescription = "Notifications for audio playback controls"
-            val importance = NotificationManager.IMPORTANCE_LOW
-            
-            val channel = NotificationChannel(channelId, channelName, importance).apply {
-                description = channelDescription
+            val channel = NotificationChannel(
+                "video_playback",
+                "Video Playback",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Video player controls"
                 setShowBadge(false)
             }
             
@@ -93,11 +92,12 @@ class AudioPlayerService : MediaSessionService() {
             notificationManager.createNotificationChannel(channel)
         }
     }
-    
+
     private fun createSessionActivityPendingIntent(): PendingIntent {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
+        
         return PendingIntent.getActivity(
             this,
             0,
@@ -111,14 +111,14 @@ class AudioPlayerService : MediaSessionService() {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra("file_path", currentFilePath)
             putExtra("file_name", currentFileName)
-            putExtra("file_type", "AUDIO")
+            putExtra("file_type", "VIDEO")
             putExtra("connection_id", currentConnectionId)
             putExtra("remote_path", currentRemotePath)
             putExtra("from_notification", true) // Flag to indicate this came from notification
         }
         return PendingIntent.getActivity(
             this,
-            1,
+            2,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

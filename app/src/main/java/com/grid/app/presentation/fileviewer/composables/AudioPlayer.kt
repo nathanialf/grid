@@ -26,6 +26,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.grid.app.presentation.fileviewer.AudioPlayerService
+import com.grid.app.presentation.fileviewer.MediaControllerManager
 import com.grid.app.presentation.fileviewer.components.WavyProgressBar
 import com.grid.app.presentation.fileviewer.models.AudioMetadata
 import com.grid.app.presentation.fileviewer.utils.extractAudioMetadata
@@ -36,7 +37,10 @@ import java.io.File
 @Composable
 fun AudioPlayer(
     file: File,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fileName: String? = null,
+    connectionId: String? = null,
+    remotePath: String? = null
 ) {
     val context = LocalContext.current
     var mediaController by remember { mutableStateOf<MediaController?>(null) }
@@ -48,7 +52,7 @@ fun AudioPlayer(
     var audioMetadata by remember { mutableStateOf<AudioMetadata>(AudioMetadata()) }
     
     // Initialize MediaController with streaming support
-    LaunchedEffect(file) {
+    LaunchedEffect(file.absolutePath) {
         try {
             isLoading = true
             error = null
@@ -57,15 +61,14 @@ fun AudioPlayer(
             val metadata = extractAudioMetadata(file)
             audioMetadata = metadata
             
-            // Create SessionToken for the service
-            val sessionToken = SessionToken(context, ComponentName(context, AudioPlayerService::class.java))
+            // Get or create MediaController through manager
+            val controller = MediaControllerManager.getAudioController(
+                context, file, fileName, connectionId, remotePath
+            )
             
-            // Create MediaController
-            val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-            controllerFuture.addListener({
-                try {
-                    val controller = controllerFuture.get()
-                    
+            if (controller != null) {
+                // Only set media if this is a new controller or different file
+                if (controller.currentMediaItem?.localConfiguration?.uri?.toString() != file.toURI().toString()) {
                     // Create media item with metadata
                     val mediaMetadata = MediaMetadata.Builder()
                         .setTitle(metadata.title ?: file.nameWithoutExtension)
@@ -81,17 +84,19 @@ fun AudioPlayer(
                     controller.setMediaItem(mediaItem)
                     controller.prepare()
                     
-                    // Auto-play when ready
-                    controller.play()
-                    
-                    mediaController = controller
-                    duration = controller.duration.coerceAtLeast(0L)
-                    isLoading = false
-                } catch (e: Exception) {
-                    error = "Error connecting to media service: ${e.message}"
-                    isLoading = false
+                    // Auto-play when ready if not already playing
+                    if (!controller.isPlaying) {
+                        controller.play()
+                    }
                 }
-            }, ContextCompat.getMainExecutor(context))
+                
+                mediaController = controller
+                duration = controller.duration.coerceAtLeast(0L)
+                isLoading = false
+            } else {
+                error = "Error connecting to media service"
+                isLoading = false
+            }
             
         } catch (e: Exception) {
             error = "Error loading audio: ${e.message}"
@@ -111,10 +116,11 @@ fun AudioPlayer(
         }
     }
     
-    // Cleanup
+    // Cleanup - Don't release here since it's managed by MediaControllerManager
     DisposableEffect(file) {
         onDispose {
-            mediaController?.release()
+            // MediaController is managed by MediaControllerManager
+            // Don't release it here to maintain playback across activities
         }
     }
     

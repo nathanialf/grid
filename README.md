@@ -15,8 +15,8 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
-- **Audio Player**: Enhanced audio player with metadata display (title, album, artist, year), wavy scrubbing progress bar, circular play button, auto-play functionality, and Android media notifications
-- **Video Player**: Native video playback with ExoPlayer integration supporting MP4, AVI, MKV, MOV, and other formats
+- **Audio Player**: Enhanced audio player with metadata display (title, album, artist, year), wavy scrubbing progress bar, circular play button, auto-play functionality, and Android media notifications with seamless notification-to-app transitions
+- **Video Player**: Custom video player with ExoPlayer integration, wavy progress bar scrubbing, auto-hiding controls, pinch-to-zoom support, and Android media notifications with seamless playback state preservation
 - **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
 - **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations (auto-exits on download start)
@@ -40,7 +40,6 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### ⚠️ Known Issues
 - **Directory Downloads**: Directory downloads are skipped (files only for now)
-- **Media Notification Icon**: Media notification uses generic play icon instead of app icon (system limitation)
 - **Audio Streaming**: Audio files are cached locally before playback rather than streaming directly (future enhancement)
 
 ### 🚧 In Development
@@ -96,6 +95,10 @@ app/src/main/java/com/grid/app/
 - **Apache Commons Net** - FTP client implementation
 - **Apache MINA SSHD** - SFTP client with SSH support
 - **SMBJ** - SMB/CIFS client for Windows file sharing
+
+### Media Libraries
+- **ExoPlayer** - Advanced media playback with custom controls and notification integration
+- **Coil** - Modern image loading with gesture support
 
 ### Archive Libraries
 - **Apache Commons Compress** - Multi-format archive processing (ZIP, TAR, GZIP)

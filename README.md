@@ -10,7 +10,8 @@ A modern Android application for browsing and managing files on remote servers t
 - **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
-- **File Opening**: Open text, image, PDF, audio, and video files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player)
+- **File Opening**: Open text, image, PDF, audio, video, and archive files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player, archive viewer)
+- **Archive Viewer**: Browse and extract ZIP, RAR, 7-Zip, TAR, and GZIP archives with hierarchical tree navigation, file metadata display, and one-click extraction with progress tracking
 - **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
@@ -96,6 +97,11 @@ app/src/main/java/com/grid/app/
 - **Apache MINA SSHD** - SFTP client with SSH support
 - **SMBJ** - SMB/CIFS client for Windows file sharing
 
+### Archive Libraries
+- **Apache Commons Compress** - Multi-format archive processing (ZIP, TAR, GZIP)
+- **Junrar** - RAR archive support
+- **XZ for Java** - LZMA/XZ compression support
+
 ## Getting Started
 
 ### Prerequisites
@@ -178,7 +184,8 @@ For biometric authentication (optional):
 - Upload files from device with real-time progress indicators
 - Create, rename, and delete files/folders with confirmation dialogs
 - Multi-select mode for batch operations
-- Open text, image, PDF, audio, and video files with built-in viewers featuring smooth keyboard scrolling for text editing and pinch-to-zoom and pan gestures
+- Open text, image, PDF, audio, video, and archive files with built-in viewers featuring smooth keyboard scrolling for text editing and pinch-to-zoom and pan gestures
+- Extract archive files (ZIP, RAR, 7-Zip, TAR, GZIP) with real-time progress tracking and automatic server upload
 - Play animated GIFs with automatic animation and zoom support
 - Access Grid files through other apps' file pickers via DocumentsProvider integration
 - Sort files by name, type, or modification date

@@ -125,6 +125,11 @@ dependencies {
     implementation(libs.mina.sshd.client)
     implementation(libs.commons.net)
     
+    // Archive Handling
+    implementation("org.apache.commons:commons-compress:1.24.0")
+    implementation("com.github.junrar:junrar:7.5.5")
+    implementation("org.tukaani:xz:1.9")
+    
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

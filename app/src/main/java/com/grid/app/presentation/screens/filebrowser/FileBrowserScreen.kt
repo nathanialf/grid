@@ -31,6 +31,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import android.app.Activity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -77,6 +79,16 @@ fun FileBrowserScreen(
             
             // Pass the URI directly to the ViewModel - it will handle the content resolution
             viewModel.uploadFile(uri, fileName)
+        }
+    }
+    
+    // File viewer activity result launcher
+    val fileViewerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            // Refresh the file list when returning from file viewer (e.g., after archive extraction)
+            viewModel.refresh()
         }
     }
     
@@ -418,7 +430,7 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        handleFileOpen(context, viewModel, file, connectionId)
+                                        handleFileOpen(context, viewModel, file, connectionId, fileViewerLauncher)
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
@@ -471,7 +483,7 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        handleFileOpen(context, viewModel, file, connectionId)
+                                        handleFileOpen(context, viewModel, file, connectionId, fileViewerLauncher)
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
@@ -898,7 +910,7 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 private enum class FileType {
-    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, UNKNOWN
+    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, ARCHIVE, UNKNOWN
 }
 
 private fun getFileType(fileName: String): FileType {
@@ -916,6 +928,9 @@ private fun getFileType(fileName: String): FileType {
         
         // Video extensions
         extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> FileType.VIDEO
+        
+        // Archive extensions
+        extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> FileType.ARCHIVE
         
         // Markdown extensions
         extension in setOf("md", "markdown") -> FileType.MARKDOWN
@@ -957,6 +972,9 @@ private fun getFileIcon(fileName: String): ImageVector {
         // Video files
         extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> Icons.Filled.PlayArrow
         
+        // Archive files
+        extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> Icons.Default.Archive
+        
         // Text files
         extension in setOf("txt", "md", "json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
             "cpp", "c", "h", "cs", "php", "rb", "go", "rs", "swift", "yml", "yaml", "toml",
@@ -975,12 +993,13 @@ private fun handleFileOpen(
     context: android.content.Context,
     viewModel: FileBrowserViewModel,
     file: RemoteFile,
-    connectionId: String?
+    connectionId: String?,
+    fileViewerLauncher: androidx.activity.result.ActivityResultLauncher<android.content.Intent>
 ) {
     val fileType = getFileType(file.name)
     
     when (fileType) {
-        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO -> {
+        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO, FileType.ARCHIVE -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
                 val intent = Intent(context, com.grid.app.presentation.fileviewer.FileViewerActivity::class.java).apply {
@@ -990,7 +1009,7 @@ private fun handleFileOpen(
                     putExtra("connection_id", connectionId)
                     putExtra("remote_path", file.path)
                 }
-                context.startActivity(intent)
+                fileViewerLauncher.launch(intent)
             }
         }
         FileType.UNKNOWN -> {

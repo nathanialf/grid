@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.NavigateBefore
 import androidx.compose.material.icons.automirrored.filled.NavigateNext
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
@@ -53,11 +54,19 @@ import com.grid.app.presentation.fileviewer.composables.TextViewer
 import com.grid.app.presentation.fileviewer.composables.MarkdownViewer
 import com.grid.app.presentation.fileviewer.composables.TextEditor
 import com.grid.app.presentation.fileviewer.composables.TextEditorActions
+import com.grid.app.presentation.fileviewer.composables.ZipViewer
+import com.grid.app.presentation.fileviewer.composables.ArchiveViewerActions
+import com.grid.app.presentation.fileviewer.composables.archive.ArchiveExtractor
+import com.grid.app.presentation.fileviewer.composables.archive.ExtractionProgress
 import com.grid.app.presentation.fileviewer.utils.FileUtils
+import com.grid.app.presentation.components.WavyCircularProgressIndicator
 import com.grid.app.domain.usecase.file.UploadFileUseCase
+import com.grid.app.domain.usecase.file.CreateDirectoryUseCase
 import com.grid.app.domain.usecase.connection.GetConnectionUseCase
 import com.grid.app.domain.model.Connection
 import com.grid.app.domain.repository.FileRepository
+import com.grid.app.presentation.MainActivity
+import android.content.Intent
 import javax.inject.Inject
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +83,9 @@ class FileViewerActivity : ComponentActivity() {
     
     @Inject
     lateinit var uploadFileUseCase: UploadFileUseCase
+    
+    @Inject
+    lateinit var createDirectoryUseCase: CreateDirectoryUseCase
     
     @Inject
     lateinit var getConnectionUseCase: GetConnectionUseCase
@@ -96,6 +108,7 @@ class FileViewerActivity : ComponentActivity() {
                     connectionId = connectionId,
                     remotePath = remotePath,
                     uploadFileUseCase = uploadFileUseCase,
+                    createDirectoryUseCase = createDirectoryUseCase,
                     getConnectionUseCase = getConnectionUseCase,
                     onBack = { finish() }
                 )
@@ -113,14 +126,21 @@ fun FileViewerScreen(
     connectionId: String?,
     remotePath: String?,
     uploadFileUseCase: UploadFileUseCase,
+    createDirectoryUseCase: CreateDirectoryUseCase,
     getConnectionUseCase: GetConnectionUseCase,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val file = File(filePath)
+    val context = LocalContext.current
     var isEditMode by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var editorActions by remember { mutableStateOf<TextEditorActions?>(null) }
+    var archiveActions by remember { mutableStateOf<ArchiveViewerActions?>(null) }
+    var isExtracting by remember { mutableStateOf(false) }
+    var extractionProgress by remember { mutableStateOf<ExtractionProgress?>(null) }
+    var isUploading by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf(0f) }
     val coroutineScope = rememberCoroutineScope()
     
     // Save error dialog
@@ -184,6 +204,100 @@ fun FileViewerScreen(
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }
+                    } else if (fileType == "ARCHIVE" && archiveActions != null) {
+                        // Extract button for archive files
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    isExtracting = true
+                                    
+                                    try {
+                                        // Create extraction directory in same location as archive
+                                        val extractDir = File(file.parent, file.nameWithoutExtension)
+                                        val archiveExtractor = ArchiveExtractor()
+                                        
+                                        archiveExtractor.extractArchive(file, extractDir).collect { progress ->
+                                            extractionProgress = progress
+                                            if (progress.isComplete) {
+                                                // Upload extracted directory back to server if we have connection info
+                                                if (connectionId != null && remotePath != null) {
+                                                    try {
+                                                        isUploading = true
+                                                        uploadProgress = 0f
+                                                        val connection = getConnectionUseCase(connectionId)
+                                                        val serverFileNameWithoutExt = fileName.substringBeforeLast('.')
+                                                        val remoteDir = remotePath.substringBeforeLast('/') + "/" + serverFileNameWithoutExt
+                                                        
+                                                        // First create the directory on the server
+                                                        createDirectoryUseCase(connection, remoteDir)
+                                                        
+                                                        // Then upload all files from the extracted directory
+                                                        uploadDirectoryContents(extractDir, remoteDir, connection, createDirectoryUseCase, uploadFileUseCase) { uploadProg ->
+                                                            uploadProgress = uploadProg
+                                                        }
+                                                        
+                                                        isUploading = false
+                                                        uploadProgress = 0f
+                                                        
+                                                        // Set result to indicate extraction completed and close the file viewer
+                                                        (context as? android.app.Activity)?.let { activity ->
+                                                            activity.setResult(android.app.Activity.RESULT_OK)
+                                                            activity.finish()
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        saveError = "Failed to upload extracted files: ${e.message}"
+                                                        isUploading = false
+                                                        uploadProgress = 0f
+                                                    }
+                                                }
+                                                isExtracting = false
+                                                extractionProgress = null
+                                            } else if (progress.error != null) {
+                                                saveError = "Extraction failed: ${progress.error}"
+                                                isExtracting = false
+                                                extractionProgress = null
+                                                isUploading = false
+                                                uploadProgress = 0f
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        saveError = "Extraction failed: ${e.message}"
+                                        isExtracting = false
+                                        extractionProgress = null
+                                        isUploading = false
+                                        uploadProgress = 0f
+                                    }
+                                }
+                            },
+                            enabled = archiveActions!!.canExtract && !isExtracting && !isUploading
+                        ) {
+                            if (isExtracting || isUploading) {
+                                val progress = if (isUploading) {
+                                    uploadProgress
+                                } else {
+                                    extractionProgress?.let { prog ->
+                                        if (prog.totalFiles > 0) {
+                                            prog.filesProcessed.toFloat() / prog.totalFiles.toFloat()
+                                        } else {
+                                            -1f // Indeterminate
+                                        }
+                                    } ?: -1f
+                                }
+                                
+                                WavyCircularProgressIndicator(
+                                    progress = progress,
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 4f
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Archive,
+                                    contentDescription = "Extract archive",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     } else if (!isEditMode && FileUtils.isEditableFile(file)) {
                         // Edit button for editable files
                         IconButton(onClick = { isEditMode = true }) {
@@ -204,6 +318,7 @@ fun FileViewerScreen(
             modifier = Modifier.padding(innerPadding),
             isEditMode = isEditMode,
             onEditorActionsChanged = { editorActions = it },
+            onArchiveActionsChanged = { archiveActions = it },
             onSaveFile = { content ->
                 coroutineScope.launch {
                     try {
@@ -247,6 +362,7 @@ fun FileViewerContent(
     modifier: Modifier = Modifier,
     isEditMode: Boolean = false,
     onEditorActionsChanged: (TextEditorActions) -> Unit = {},
+    onArchiveActionsChanged: (ArchiveViewerActions) -> Unit = {},
     onSaveFile: (String) -> Unit = {},
     onExitEditor: () -> Unit = {}
 ) {
@@ -342,6 +458,13 @@ fun FileViewerContent(
             VideoPlayer(
                 file = file,
                 modifier = modifier
+            )
+        }
+        "ARCHIVE" -> {
+            ZipViewer(
+                file = file,
+                modifier = modifier,
+                onActionsChanged = onArchiveActionsChanged
             )
         }
         else -> {
@@ -683,6 +806,45 @@ private fun VideoPlayer(
             }
         }
     }
+}
+
+private suspend fun uploadDirectoryContents(
+    localDir: File,
+    remoteDir: String,
+    connection: Connection,
+    createDirectoryUseCase: CreateDirectoryUseCase,
+    uploadFileUseCase: UploadFileUseCase,
+    onProgress: (Float) -> Unit = {}
+) {
+    // Count total files first
+    fun countFiles(dir: File): Int {
+        return dir.listFiles()?.sumOf { file ->
+            if (file.isDirectory) countFiles(file) else 1
+        } ?: 0
+    }
+    
+    val totalFiles = countFiles(localDir)
+    var uploadedFiles = 0
+    
+    // Recursively upload all files and subdirectories
+    suspend fun uploadRecursive(dir: File, remoteDirPath: String) {
+        dir.listFiles()?.forEach { file ->
+            if (file.isDirectory) {
+                // Create subdirectory on server and upload its contents
+                val subRemoteDir = "$remoteDirPath/${file.name}"
+                createDirectoryUseCase(connection, subRemoteDir)
+                uploadRecursive(file, subRemoteDir)
+            } else {
+                // Upload individual file
+                val remoteFilePath = "$remoteDirPath/${file.name}"
+                uploadFileUseCase(connection, file.absolutePath, remoteFilePath)
+                uploadedFiles++
+                onProgress(uploadedFiles.toFloat() / totalFiles.toFloat())
+            }
+        }
+    }
+    
+    uploadRecursive(localDir, remoteDir)
 }
 
 

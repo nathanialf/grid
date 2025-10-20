@@ -265,7 +265,6 @@ fun TextEditor(
                                                 
                                                 // Calculate where keyboard will appear on screen
                                                 val keyboardTop = rect.bottom
-                                                val screenHeight = rootView.height
                                                 val keyboardTopRelativeToViewport = keyboardTop
                                                 
                                                 // Only scroll if cursor is behind/below the keyboard in viewport

@@ -431,7 +431,7 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        handleFileOpen(context, viewModel, file, connectionId, fileViewerLauncher)
+                                        handleFileOpen(context, viewModel, file, connectionId, fileViewerLauncher, uiState.downloadingFiles.contains(file.path))
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
@@ -484,7 +484,7 @@ fun FileBrowserScreen(
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
                                     } else {
-                                        handleFileOpen(context, viewModel, file, connectionId, fileViewerLauncher)
+                                        handleFileOpen(context, viewModel, file, connectionId, fileViewerLauncher, uiState.downloadingFiles.contains(file.path))
                                     }
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
@@ -1001,8 +1001,15 @@ private fun handleFileOpen(
     viewModel: FileBrowserViewModel,
     file: RemoteFile,
     connectionId: String?,
-    fileViewerLauncher: androidx.activity.result.ActivityResultLauncher<android.content.Intent>
+    fileViewerLauncher: androidx.activity.result.ActivityResultLauncher<android.content.Intent>,
+    isDownloading: Boolean = false
 ) {
+    // If file is already downloading, cancel it
+    if (isDownloading) {
+        viewModel.cancelDownload(file.path)
+        return
+    }
+    
     val fileType = getFileType(file.name)
     
     when (fileType) {

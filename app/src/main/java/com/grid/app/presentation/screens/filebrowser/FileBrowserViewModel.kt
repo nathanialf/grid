@@ -22,6 +22,7 @@ import com.grid.app.domain.usecase.file.RenameDirUseCase
 import com.grid.app.domain.usecase.file.UploadFileUseCase
 import com.grid.app.domain.usecase.settings.GetSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,7 @@ class FileBrowserViewModel @Inject constructor(
     val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
 
     private var currentConnection: Connection? = null
+    private val downloadJobs = mutableMapOf<String, Job>()
 
     fun initialize(connectionId: String, initialPath: String? = null) {
         viewModelScope.launch {
@@ -147,7 +149,7 @@ class FileBrowserViewModel @Inject constructor(
     fun openFile(file: RemoteFile, onFileReady: (File) -> Unit) {
         val connection = currentConnection ?: return
 
-        viewModelScope.launch {
+        val job = viewModelScope.launch {
             try {
                 // Create temporary file in cache directory
                 val tempDir = File(application.cacheDir, "opened_files")
@@ -186,6 +188,7 @@ class FileBrowserViewModel @Inject constructor(
                         )
                         
                         if (transfer.state == com.grid.app.domain.model.TransferState.COMPLETED) {
+                            downloadJobs.remove(file.path)
                             _uiState.value = _uiState.value.copy(
                                 downloadingFiles = _uiState.value.downloadingFiles - file.path,
                                 downloadProgress = _uiState.value.downloadProgress - file.path
@@ -197,13 +200,31 @@ class FileBrowserViewModel @Inject constructor(
                     }
                 
             } catch (exception: Exception) {
+                downloadJobs.remove(file.path)
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles - file.path,
                     downloadProgress = _uiState.value.downloadProgress - file.path,
-                    error = "Failed to open ${file.name}: ${exception.message}"
+                    error = if (exception is kotlinx.coroutines.CancellationException) {
+                        null // Don't show error for user-cancelled downloads
+                    } else {
+                        "Failed to open ${file.name}: ${exception.message}"
+                    }
                 )
             }
         }
+        
+        // Store the job so it can be cancelled
+        downloadJobs[file.path] = job
+    }
+
+    fun cancelDownload(filePath: String) {
+        downloadJobs[filePath]?.cancel()
+        downloadJobs.remove(filePath)
+        
+        _uiState.value = _uiState.value.copy(
+            downloadingFiles = _uiState.value.downloadingFiles - filePath,
+            downloadProgress = _uiState.value.downloadProgress - filePath
+        )
     }
 
     private fun isCacheValid(cachedFile: File, remoteFile: RemoteFile): Boolean {

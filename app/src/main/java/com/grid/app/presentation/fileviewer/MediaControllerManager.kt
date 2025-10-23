@@ -35,8 +35,23 @@ object MediaControllerManager {
             return audioController
         }
         
-        // Release old controller if switching files
-        releaseAudioController()
+        // Release old controller properly if switching files
+        if (audioController != null) {
+            try {
+                // Stop the player before releasing to prevent leaks
+                audioController?.stop()
+                audioController?.release()
+            } catch (e: Exception) {
+                // Ignore errors during cleanup
+            }
+            audioController = null
+            currentAudioFile = null
+            audioControllerFuture?.cancel(true)
+            audioControllerFuture = null
+            
+            // Give the system a moment to clean up
+            kotlinx.coroutines.delay(100)
+        }
         
         return try {
             // Start service with file information
@@ -83,8 +98,23 @@ object MediaControllerManager {
             return videoController
         }
         
-        // Release old controller if switching files
-        releaseVideoController()
+        // Release old controller properly if switching files
+        if (videoController != null) {
+            try {
+                // Stop the player before releasing to prevent leaks
+                videoController?.stop()
+                videoController?.release()
+            } catch (e: Exception) {
+                // Ignore errors during cleanup
+            }
+            videoController = null
+            currentVideoFile = null
+            videoControllerFuture?.cancel(true)
+            videoControllerFuture = null
+            
+            // Give the system a moment to clean up
+            kotlinx.coroutines.delay(100)
+        }
         
         return try {
             // Start service with file information

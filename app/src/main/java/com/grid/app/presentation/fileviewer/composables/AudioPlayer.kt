@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -31,6 +32,9 @@ import com.grid.app.presentation.fileviewer.components.WavyProgressBar
 import com.grid.app.presentation.fileviewer.models.AudioMetadata
 import com.grid.app.presentation.fileviewer.utils.extractAudioMetadata
 import com.grid.app.presentation.fileviewer.utils.formatTime
+import com.grid.app.presentation.fileviewer.utils.extractColorsFromAlbumArt
+import com.grid.app.presentation.fileviewer.utils.AlbumArtColorScheme
+import com.grid.app.presentation.fileviewer.utils.toMaterial3ColorScheme
 import kotlinx.coroutines.delay
 import java.io.File
 
@@ -50,6 +54,11 @@ fun AudioPlayer(
     var error by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(true) }
     var audioMetadata by remember { mutableStateOf<AudioMetadata>(AudioMetadata()) }
+    var albumArtColorScheme by remember { mutableStateOf<AlbumArtColorScheme?>(null) }
+    
+    // Detect current theme
+    val currentColorScheme = MaterialTheme.colorScheme
+    val isDarkTheme = currentColorScheme.background.luminance() < 0.5f
     
     // Initialize MediaController with streaming support
     LaunchedEffect(file.absolutePath) {
@@ -60,6 +69,11 @@ fun AudioPlayer(
             // Extract metadata first
             val metadata = extractAudioMetadata(file)
             audioMetadata = metadata
+            
+            // Extract colors from album art if available
+            metadata.albumArt?.let { bitmap ->
+                albumArtColorScheme = extractColorsFromAlbumArt(bitmap, isDarkTheme)
+            }
             
             // Get or create MediaController through manager
             val controller = MediaControllerManager.getAudioController(
@@ -124,119 +138,138 @@ fun AudioPlayer(
         }
     }
     
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+    // Apply album art colors if available, otherwise use system colors
+    val effectiveColorScheme = albumArtColorScheme?.toMaterial3ColorScheme(currentColorScheme) ?: currentColorScheme
+    
+    MaterialTheme(
+        colorScheme = effectiveColorScheme
     ) {
-        when {
-            isLoading -> {
-                CircularProgressIndicator()
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Loading audio...")
-            }
-            error != null -> {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.error
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = error!!,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center
-                )
-            }
-            else -> {
-                // Album art or placeholder
-                Card(
-                    modifier = Modifier.size(200.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    val albumArt = audioMetadata.albumArt
-                    if (albumArt != null) {
-                        androidx.compose.foundation.Image(
-                            bitmap = albumArt.asImageBitmap(),
-                            contentDescription = "Album Art",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop
+        BoxWithConstraints(
+            modifier = modifier.fillMaxSize()
+        ) {
+            val maxHeight = maxHeight
+            val maxWidth = maxWidth
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+            when {
+                isLoading -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Loading audio...")
+                    }
+                }
+                error != null -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.error
                         )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = "Audio file",
-                                modifier = Modifier.size(64.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = error!!,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                else -> {
+                    // Album art section - maximize size
+                    val albumArtSize = minOf(maxWidth * 0.85f, maxHeight * 0.45f)
+                    
+                    Card(
+                        modifier = Modifier.size(albumArtSize),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        val albumArt = audioMetadata.albumArt
+                        if (albumArt != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = albumArt.asImageBitmap(),
+                                contentDescription = "Album Art",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Audio file",
+                                    modifier = Modifier.size(albumArtSize * 0.3f),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Track metadata
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.weight(1f, false)
+                    ) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        Text(
+                            text = audioMetadata.title ?: file.nameWithoutExtension,
+                            style = MaterialTheme.typography.headlineSmall,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        audioMetadata.artist?.let { artist ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        audioMetadata.album?.let { album ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = album,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        audioMetadata.year?.let { year ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = year,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Track metadata
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = audioMetadata.title ?: file.nameWithoutExtension,
-                        style = MaterialTheme.typography.headlineSmall,
-                        textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.Bold
-                    )
                     
-                    audioMetadata.artist?.let { artist ->
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = artist,
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    audioMetadata.album?.let { album ->
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = album,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    audioMetadata.year?.let { year ->
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = year,
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // Progress section with wavy progress bar
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
+                    // Bottom control section
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Time display
                         Row(
@@ -245,19 +278,22 @@ fun AudioPlayer(
                         ) {
                             Text(
                                 text = formatTime(currentPosition.toInt()),
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = formatTime(duration.toInt()),
-                                style = MaterialTheme.typography.bodyMedium
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         
                         Spacer(modifier = Modifier.height(8.dp))
                         
-                        // Wavy progress bar with scrubbing
+                        // Wavy progress bar with scrubbing - no container
                         WavyProgressBar(
                             progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                            isPlaying = isPlaying,
                             onSeek = { progress ->
                                 mediaController?.let { player ->
                                     val seekPosition = (progress * duration).toLong()
@@ -268,65 +304,66 @@ fun AudioPlayer(
                                 .fillMaxWidth()
                                 .height(32.dp)
                         )
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // Controls
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(24.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Stop button
-                    IconButton(
-                        onClick = {
-                            mediaController?.let { player ->
-                                player.pause()
-                                player.seekTo(0)
-                                isPlaying = false
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        // Controls
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Stop button
+                            IconButton(
+                                onClick = {
+                                    mediaController?.let { player ->
+                                        player.pause()
+                                        player.seekTo(0)
+                                        isPlaying = false
+                                    }
+                                },
+                                enabled = mediaController != null
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = "Stop",
+                                    modifier = Modifier.size(32.dp)
+                                )
                             }
-                        },
-                        enabled = mediaController != null
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop",
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                    
-                    // Play/Pause button - circular
-                    Card(
-                        modifier = Modifier.size(64.dp),
-                        shape = CircleShape,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primary
-                        ),
-                        onClick = {
-                            mediaController?.let { player ->
-                                if (isPlaying) {
-                                    player.pause()
-                                } else {
-                                    player.play()
+                            
+                            // Play/Pause button - circular
+                            Card(
+                                modifier = Modifier.size(64.dp),
+                                shape = CircleShape,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                onClick = {
+                                    mediaController?.let { player ->
+                                        if (isPlaying) {
+                                            player.pause()
+                                        } else {
+                                            player.play()
+                                        }
+                                    }
+                                }
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = if (isPlaying) "Pause" else "Play",
+                                        modifier = Modifier.size(32.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
                                 }
                             }
-                        }
-                    ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                contentDescription = if (isPlaying) "Pause" else "Play",
-                                modifier = Modifier.size(32.dp),
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
                         }
                     }
                 }
             }
         }
     }
+}
 }

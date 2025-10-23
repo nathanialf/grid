@@ -11,6 +11,7 @@ import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.DefaultMediaNotificationProvider
 import com.grid.app.R
 import com.grid.app.presentation.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
@@ -46,6 +47,9 @@ class VideoPlayerService : MediaSessionService() {
             .setId("video_session_${System.currentTimeMillis()}")
             .setSessionActivity(createSessionActivityPendingIntent())
             .build()
+            
+        // Set up custom notification provider with monochrome icon
+        setupMediaNotificationProvider()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? {
@@ -122,5 +126,17 @@ class VideoPlayerService : MediaSessionService() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+    
+    private fun setupMediaNotificationProvider() {
+        // Create custom notification provider that sets monochrome icon
+        val notificationProvider = DefaultMediaNotificationProvider.Builder(this)
+            .setChannelId("video_playback")
+            .setNotificationId(1002)
+            .build()
+        
+        // Set the small icon through the notification provider
+        notificationProvider.setSmallIcon(R.drawable.ic_launcher_monochrome)
+        setMediaNotificationProvider(notificationProvider)
     }
 }

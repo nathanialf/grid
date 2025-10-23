@@ -17,8 +17,8 @@ A modern Android application for browsing and managing files on remote servers t
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
 - **Ebook Viewer**: Advanced EPUB ebook reader with HorizontalPager chapter navigation, swipe gestures, reading position persistence with scroll preservation, comprehensive text formatting (bold, italic, underline, strikethrough, superscript, subscript, code highlighting), working images with native rendering, and immersive reading experience with auto-hiding controls
 - **Markdown Viewer**: Rich markdown rendering with proper formatting, headers, links, and theme-aware styling
-- **Audio Player**: Enhanced audio player with metadata display (title, album, artist, year), wavy scrubbing progress bar, circular play button, auto-play functionality, and Android media notifications with seamless notification-to-app transitions
-- **Video Player**: Custom video player with ExoPlayer integration, wavy progress bar scrubbing, auto-hiding controls, pinch-to-zoom support, and Android media notifications with seamless playback state preservation
+- **Audio Player**: Enhanced audio player with responsive album art sizing, material color themes extracted from album art, metadata display (title, album, artist, year), wavy scrubbing progress bar with smooth animations, circular play button, auto-play functionality, and Android media notifications with monochrome app icon and seamless notification-to-app transitions
+- **Video Player**: Custom video player with ExoPlayer integration, wavy progress bar scrubbing with pause animation control, auto-hiding controls, pinch-to-zoom support, and Android media notifications with monochrome app icon and seamless playback state preservation
 - **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
 - **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations (auto-exits on download start)

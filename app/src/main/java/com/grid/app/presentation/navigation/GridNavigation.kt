@@ -73,7 +73,17 @@ fun GridNavigation(
             FileBrowserScreen(
                 connectionId = connectionId,
                 onNavigateBack = {
-                    navController.popBackStack()
+                    // Ensure we only pop if there's a valid destination to go back to
+                    if (navController.previousBackStackEntry != null) {
+                        navController.popBackStack()
+                    } else {
+                        // If no previous entry, navigate to connection list
+                        navController.navigate(GridDestinations.ConnectionList.route) {
+                            popUpTo(GridDestinations.ConnectionList.route) {
+                                inclusive = true
+                            }
+                        }
+                    }
                 }
             )
         }

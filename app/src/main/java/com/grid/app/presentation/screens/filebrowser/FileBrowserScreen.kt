@@ -65,6 +65,30 @@ fun FileBrowserScreen(
     var showRenameDialog by remember { mutableStateOf(false) }
     var fileToRename by remember { mutableStateOf<RemoteFile?>(null) }
     
+    // Navigation debouncing
+    var isNavigating by remember { mutableStateOf(false) }
+    val debouncedNavigateBack = remember {
+        {
+            if (!isNavigating) {
+                isNavigating = true
+                onNavigateBack()
+            }
+        }
+    }
+    
+    // Keep screen on during long operations
+    val hasActiveOperations = uiState.downloadingFiles.isNotEmpty() || 
+                              uiState.isUploading
+    
+    DisposableEffect(hasActiveOperations) {
+        val window = (context as? android.app.Activity)?.window
+        if (hasActiveOperations) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
     
     // File picker launcher
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -115,7 +139,7 @@ fun FileBrowserScreen(
 
     BackHandler {
         if (!viewModel.handleBackNavigation()) {
-            onNavigateBack()
+            debouncedNavigateBack()
         }
     }
     
@@ -158,9 +182,7 @@ fun FileBrowserScreen(
                 },
                 navigationIcon = {
                     IconButton(
-                        onClick = {
-                            onNavigateBack()
-                        }
+                        onClick = debouncedNavigateBack
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Home,
@@ -436,8 +458,12 @@ fun FileBrowserScreen(
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
                                 isSelected = uiState.selectedFiles.contains(file.path),
-                                onSelectionToggle = { viewModel.toggleFileSelection(file.path) },
-                                onLongPress = { viewModel.enterSelectionModeWithFile(file.path) },
+                                onSelectionToggle = { 
+                                    viewModel.toggleFileSelection(file.path) 
+                                },
+                                onLongPress = { 
+                                    viewModel.enterSelectionModeWithFile(file.path) 
+                                },
                                 isDownloading = uiState.downloadingFiles.contains(file.path),
                                 downloadProgress = uiState.downloadProgress[file.path] ?: 0f
                             )
@@ -489,8 +515,12 @@ fun FileBrowserScreen(
                                 },
                                 isSelectionMode = uiState.isSelectionMode,
                                 isSelected = uiState.selectedFiles.contains(file.path),
-                                onSelectionToggle = { viewModel.toggleFileSelection(file.path) },
-                                onLongPress = { viewModel.enterSelectionModeWithFile(file.path) },
+                                onSelectionToggle = { 
+                                    viewModel.toggleFileSelection(file.path) 
+                                },
+                                onLongPress = { 
+                                    viewModel.enterSelectionModeWithFile(file.path) 
+                                },
                                 isDownloading = uiState.downloadingFiles.contains(file.path),
                                 downloadProgress = uiState.downloadProgress[file.path] ?: 0f
                             )
@@ -806,6 +836,7 @@ private fun FileItem(
                     detectTapGestures(
                         onTap = {
                             if (isSelectionMode) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onSelectionToggle()
                             } else {
                                 onClick()
@@ -830,7 +861,10 @@ private fun FileItem(
             if (isSelectionMode) {
                 Checkbox(
                     checked = isSelected,
-                    onCheckedChange = { onSelectionToggle() }
+                    onCheckedChange = { 
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onSelectionToggle() 
+                    }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
@@ -1099,6 +1133,7 @@ private fun FileGridItem(
                     detectTapGestures(
                         onTap = {
                             if (isSelectionMode) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onSelectionToggle()
                             } else {
                                 onClick()
@@ -1170,7 +1205,10 @@ private fun FileGridItem(
             if (isSelectionMode) {
                 Checkbox(
                     checked = isSelected,
-                    onCheckedChange = { onSelectionToggle() },
+                    onCheckedChange = { 
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        onSelectionToggle() 
+                    },
                     modifier = Modifier
                         .align(androidx.compose.ui.Alignment.TopEnd)
                         .padding(4.dp)

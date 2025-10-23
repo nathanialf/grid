@@ -20,6 +20,7 @@ fun WavyProgressBar(
     progress: Float,
     onSeek: (Float) -> Unit,
     modifier: Modifier = Modifier,
+    isPlaying: Boolean = true,
     color: Color = MaterialTheme.colorScheme.primary,
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     strokeWidth: Float = 8.dp.value
@@ -35,14 +36,25 @@ fun WavyProgressBar(
     
     val infiniteTransition = rememberInfiniteTransition(label = "WavyProgressBarAnimation")
     
+    // Only animate wave when playing and not dragging
+    val shouldAnimate = isPlaying && !isDragging
+    
     val wavePhase by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 2f * PI.toFloat(),
+        targetValue = if (shouldAnimate) 2f * PI.toFloat() else 0f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = LinearEasing),
+            animation = tween(if (shouldAnimate) 1500 else 1, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "WavePhase"
+    )
+    
+    // Smooth amplitude transition animation
+    val targetAmplitude = if (shouldAnimate) strokeWidth * 0.6f else 0f
+    val animatedAmplitude by animateFloatAsState(
+        targetValue = targetAmplitude,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label = "AmplitudeTransition"
     )
     
     Canvas(
@@ -83,7 +95,8 @@ fun WavyProgressBar(
             progressColor = color,
             trackColor = backgroundColor,
             strokeWidth = strokeWidth,
-            wavePhase = wavePhase
+            wavePhase = wavePhase,
+            animatedAmplitude = animatedAmplitude
         )
         
         // Draw thumb at current position
@@ -103,10 +116,10 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnifiedLinearTr
     progressColor: Color,
     trackColor: Color,
     strokeWidth: Float,
-    wavePhase: Float
+    wavePhase: Float,
+    animatedAmplitude: Float
 ) {
     val y = height / 2
-    val waveAmplitude = strokeWidth * 0.6f
     val segments = (width / 1f).toInt().coerceAtLeast(50)
     val stepX = width / segments
     
@@ -119,12 +132,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnifiedLinearTr
         val x = i * stepX
         val isInProgressSection = x <= progressWidth
         
-        val currentY = if (isInProgressSection) {
-            // Wavy for progress section
-            val wave = sin((2f * PI * x / wavelengthInPixels + wavePhase).toFloat()) * waveAmplitude
+        val currentY = if (isInProgressSection && animatedAmplitude > 0f) {
+            // Wavy for progress section when playing
+            val wave = sin((2f * PI * x / wavelengthInPixels + wavePhase).toFloat()) * animatedAmplitude
             y + wave
         } else {
-            // Flat for remaining section
+            // Flat for remaining section or when paused/dragging
             y
         }
         

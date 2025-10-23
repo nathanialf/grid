@@ -1,5 +1,6 @@
 package com.grid.app.presentation.fileviewer.composables
 
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
@@ -8,15 +9,17 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.size
 import com.grid.app.presentation.components.WavyCircularProgressIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileViewerTopBar(
     fileName: String,
+    fileType: String? = null,
     canEdit: Boolean = false,
     isEditMode: Boolean = false,
     canSave: Boolean = false,
@@ -30,8 +33,39 @@ fun FileViewerTopBar(
     onExitEdit: () -> Unit = {},
     onExtract: () -> Unit = {}
 ) {
-    TopAppBar(
-        title = { Text(fileName) },
+    val viewerType = when (fileType?.uppercase()) {
+        "AUDIO" -> "Audio"
+        "VIDEO" -> "Video"
+        "IMAGE" -> "Image"
+        "PDF" -> "PDF"
+        "TEXT", "CODE" -> if (isEditMode) "Text Editor" else "Text"
+        "MARKDOWN" -> "Markdown"
+        "EBOOK" -> "Ebook"
+        "ARCHIVE" -> "Archive"
+        else -> "File"
+    }
+    
+    CenterAlignedTopAppBar(
+        title = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = viewerType,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = fileName,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(

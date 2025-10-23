@@ -43,6 +43,13 @@ class FileViewerActivity : ComponentActivity() {
             }
         }
     }
+    
+    override fun onDestroy() {
+        // Clean up MediaControllers when activity is destroyed
+        // This prevents service connection leaks
+        MediaControllerManager.releaseAll()
+        super.onDestroy()
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -63,6 +70,17 @@ fun FileViewerScreen(
     
     var editorActions by remember { mutableStateOf<TextEditorActions?>(null) }
     var archiveActions by remember { mutableStateOf<ArchiveViewerActions?>(null) }
+    
+    // Keep screen on during extraction and upload operations
+    DisposableEffect(uiState.isExtracting, uiState.isUploading) {
+        val window = (context as? android.app.Activity)?.window
+        if (uiState.isExtracting || uiState.isUploading) {
+            window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
     
     // Handle extraction completion
     LaunchedEffect(uiState.extractionComplete) {
@@ -93,6 +111,7 @@ fun FileViewerScreen(
         topBar = {
             FileViewerTopBar(
                 fileName = fileName,
+                fileType = fileType,
                 canEdit = FileUtils.isEditableFile(file),
                 isEditMode = uiState.isEditMode,
                 canSave = editorActions?.hasUnsavedChanges == true,

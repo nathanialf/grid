@@ -84,6 +84,7 @@ dependencies {
     
     // Additional Compose dependencies
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation("androidx.palette:palette-ktx:1.0.0") // For album art color extraction
     
     // Dependency Injection
     implementation(libs.hilt.android)

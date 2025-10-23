@@ -185,6 +185,7 @@ fun VideoPlayer(
                                 player = mediaController
                                 useController = false // Disable default controls
                                 setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                                keepScreenOn = true // Prevent screen from turning off during video playback
                             }
                         },
                         update = { playerView ->
@@ -192,6 +193,8 @@ fun VideoPlayer(
                             if (playerView.player != mediaController) {
                                 playerView.player = mediaController
                             }
+                            // Update screen wake lock based on playback state
+                            playerView.keepScreenOn = isPlaying
                         }
                     )
                 }
@@ -251,6 +254,7 @@ fun VideoPlayer(
                                 // Wavy progress bar with scrubbing
                                 WavyProgressBar(
                                     progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                                    isPlaying = isPlaying,
                                     onSeek = { progress ->
                                         mediaController?.let { player ->
                                             val seekPosition = (progress * duration).toLong()

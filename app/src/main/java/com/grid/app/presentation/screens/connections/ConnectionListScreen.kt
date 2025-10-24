@@ -139,8 +139,7 @@ fun ConnectionListScreen(
                 EmptyConnectionsView(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(paddingValues),
-                    onAddConnection = onNavigateToAddConnection
+                        .padding(paddingValues)
                 )
             }
             
@@ -205,8 +204,7 @@ fun ConnectionListScreen(
 
 @Composable
 private fun EmptyConnectionsView(
-    modifier: Modifier = Modifier,
-    onAddConnection: () -> Unit
+    modifier: Modifier = Modifier
 ) {
     Column(
         modifier = modifier,
@@ -235,18 +233,6 @@ private fun EmptyConnectionsView(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Button(onClick = onAddConnection) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Add Connection")
-        }
     }
 }
 

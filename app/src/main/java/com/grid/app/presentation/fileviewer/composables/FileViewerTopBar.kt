@@ -39,7 +39,7 @@ fun FileViewerTopBar(
         "IMAGE" -> "Image"
         "PDF" -> "PDF"
         "TEXT", "CODE" -> if (isEditMode) "Text Editor" else "Text"
-        "MARKDOWN" -> "Markdown"
+        "MARKDOWN" -> if (isEditMode) "Text Editor" else "Markdown"
         "EBOOK" -> "Ebook"
         "ARCHIVE" -> "Archive"
         else -> "File"

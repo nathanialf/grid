@@ -1,5 +1,6 @@
 package com.grid.app.presentation.fileviewer.ebook
 
+import android.util.Log
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -30,6 +31,8 @@ data class ImageInfo(
 
 object HtmlToCompose {
     
+    private const val TAG = "HtmlToCompose"
+    
     @Composable
     fun parseHtmlToAnnotatedString(html: String): AnnotatedString {
         return parseHtmlToContent(html).text
@@ -37,14 +40,53 @@ object HtmlToCompose {
     
     @Composable
     fun parseHtmlToContent(html: String): ParsedContent {
+        Log.d(TAG, "Starting HTML parsing - content length: ${html.length}")
+        
+        // Handle empty or whitespace-only HTML
+        if (html.isBlank()) {
+            Log.w(TAG, "HTML content is blank or empty")
+            return ParsedContent(AnnotatedString("No content available"), emptyList())
+        }
+        
         val doc = Jsoup.parse(html)
         val body = doc.body() ?: doc
         val images = mutableListOf<ImageInfo>()
+        
+        Log.d(TAG, "Parsed HTML document - body element: ${body.tagName()}, child count: ${body.childNodeSize()}")
+        
+        // Log a preview of the HTML structure
+        val htmlPreview = html.take(300).replace('\n', ' ')
+        Log.d(TAG, "HTML preview: $htmlPreview")
         
         val text = buildAnnotatedString {
             parseElement(body, this, images)
         }
         
+        Log.d(TAG, "Extracted text length: ${text.text.length}, images: ${images.size}")
+        
+        // If no text was extracted, fall back to plain text extraction
+        if (text.text.isBlank()) {
+            Log.w(TAG, "No styled text extracted, falling back to plain text")
+            val plainText = body.text()
+            Log.d(TAG, "Plain text length: ${plainText.length}")
+            if (plainText.isNotBlank()) {
+                Log.d(TAG, "Using plain text fallback")
+                return ParsedContent(AnnotatedString(plainText), images)
+            } else {
+                Log.w(TAG, "Plain text also empty, using HTML stripping fallback")
+                // Last resort: return raw HTML without tags
+                val strippedText = html.replace(Regex("<[^>]*>"), " ")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+                Log.d(TAG, "Stripped text length: ${strippedText.length}")
+                return ParsedContent(
+                    AnnotatedString(strippedText.ifBlank { "No readable content found" }),
+                    images
+                )
+            }
+        }
+        
+        Log.d(TAG, "HTML parsing completed successfully")
         return ParsedContent(text, images)
     }
     
@@ -323,6 +365,20 @@ object HtmlToCompose {
                                 // Add placeholder text for the image
                                 builder.append(placeholder)
                             }
+                        }
+                        // Common HTML container and semantic tags that should just pass through content
+                        "main", "header", "footer", "nav", "aside", "body", "html", "center", "font" -> {
+                            parseElement(child, builder, images)
+                        }
+                        // List elements
+                        "ul", "ol" -> {
+                            if (builder.length > 0) builder.append("\n")
+                            parseElement(child, builder, images)
+                            builder.append("\n")
+                        }
+                        "li" -> {
+                            if (builder.length > 0) builder.append("\n• ")
+                            parseElement(child, builder, images)
                         }
                         else -> {
                             // For any other tag, just parse the content

@@ -105,6 +105,7 @@ dependencies {
     // Image Loading
     implementation(libs.coil.compose)
     implementation(libs.coil.gif)
+    implementation(libs.coil.svg)
     
     // Markdown Rendering
     implementation("io.noties.markwon:core:4.6.2") {

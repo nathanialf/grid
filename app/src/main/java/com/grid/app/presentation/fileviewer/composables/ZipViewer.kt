@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -293,7 +294,9 @@ private fun getFileIcon(entry: ArchiveEntry): ImageVector {
         Icons.Default.Folder
     } else {
         when (entry.extension.lowercase()) {
-            "txt", "md", "json", "xml", "html", "css", "js", "py", "kt", "java" -> Icons.Default.Description
+            "md", "markdown" -> Icons.Default.Description
+            "json", "xml", "html", "css", "js", "py", "kt", "java", "ts", "cpp", "c", "cs", "php", "rb", "go", "rs", "swift" -> Icons.Default.Code
+            "txt" -> Icons.AutoMirrored.Filled.TextSnippet
             "jpg", "jpeg", "png", "gif", "bmp", "webp" -> Icons.Default.Image
             "mp3", "wav", "flac", "ogg", "m4a" -> Icons.Default.AudioFile
             "mp4", "avi", "mkv", "mov", "wmv" -> Icons.Default.VideoFile

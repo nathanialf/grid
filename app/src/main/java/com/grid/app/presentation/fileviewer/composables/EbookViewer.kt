@@ -1,5 +1,6 @@
 package com.grid.app.presentation.fileviewer.composables
 
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -242,11 +243,17 @@ fun ChapterContent(
     onTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val TAG = "ChapterContent"
     val lazyListState = rememberLazyListState()
     val htmlToCompose = com.grid.app.presentation.fileviewer.ebook.HtmlToCompose
     
+    Log.d(TAG, "ChapterContent composing for chapter: '${chapter.title}' (${chapter.spineIndex})")
+    Log.d(TAG, "Chapter content length: ${chapter.content.length} characters")
+    
     // Parse HTML to get both text and images
     val parsedContent = htmlToCompose.parseHtmlToContent(chapter.content)
+    
+    Log.d(TAG, "Parsed content - text length: ${parsedContent.text.text.length}, images: ${parsedContent.images.size}")
     
     // Restore scroll position
     LaunchedEffect(scrollOffset) {
@@ -265,6 +272,18 @@ fun ChapterContent(
         onScrollPositionChanged(offset)
     }
     
+    // Log text parts for debugging
+    val textParts = splitTextByImages(parsedContent)
+    Log.d(TAG, "Split content into ${textParts.size} parts")
+    
+    // Log each part type and length for debugging
+    textParts.forEachIndexed { index, part ->
+        when (part) {
+            is ContentPart.TextPart -> Log.d(TAG, "Part $index: Text (${part.text.text.length} chars)")
+            is ContentPart.ImagePart -> Log.d(TAG, "Part $index: Image (${part.imageInfo.src})")
+        }
+    }
+    
     LazyColumn(
         state = lazyListState,
         modifier = modifier
@@ -276,12 +295,13 @@ fun ChapterContent(
             },
         contentPadding = PaddingValues(vertical = 16.dp)
     ) {
-        // Split content by images to create alternating text/image sections
-        val textParts = splitTextByImages(parsedContent)
-        
         items(textParts) { contentPart ->
             when (contentPart) {
                 is ContentPart.TextPart -> {
+                    // Log if text content is empty for debugging
+                    if (contentPart.text.text.isBlank()) {
+                        Log.w(TAG, "Rendering empty text part")
+                    }
                     androidx.compose.material3.Text(
                         text = contentPart.text,
                         style = MaterialTheme.typography.bodyLarge.copy(
@@ -294,6 +314,7 @@ fun ChapterContent(
                     )
                 }
                 is ContentPart.ImagePart -> {
+                    Log.d(TAG, "Rendering image: ${contentPart.imageInfo.src}")
                     EbookImage(
                         imageInfo = contentPart.imageInfo,
                         bookInfo = bookInfo,
@@ -355,16 +376,21 @@ fun EbookImage(
     bookInfo: com.grid.app.presentation.fileviewer.ebook.EpubBookInfo,
     modifier: Modifier = Modifier
 ) {
+    val TAG = "EbookImage"
+    Log.d(TAG, "Attempting to display image: ${imageInfo.src}")
+    
     // Try to find the image in the book's image data
     val imageData = bookInfo.imagePaths[imageInfo.src] 
         ?: bookInfo.imagePaths[imageInfo.src.substringAfterLast('/')]
     
     if (imageData != null) {
+        Log.d(TAG, "Found image data for: ${imageInfo.src} (${imageData.size} bytes)")
         val bitmap = remember(imageData) {
             BitmapFactory.decodeByteArray(imageData, 0, imageData.size)
         }
         
         if (bitmap != null) {
+            Log.d(TAG, "Successfully decoded bitmap: ${bitmap.width}x${bitmap.height}")
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = imageInfo.alt,
@@ -373,6 +399,7 @@ fun EbookImage(
                     .padding(vertical = 8.dp)
             )
         } else {
+            Log.w(TAG, "Failed to decode bitmap for image: ${imageInfo.src}")
             // Fallback text if bitmap decoding fails
             Text(
                 text = imageInfo.alt ?: "[Image]",
@@ -382,6 +409,8 @@ fun EbookImage(
             )
         }
     } else {
+        Log.w(TAG, "Image data not found for: ${imageInfo.src}")
+        Log.d(TAG, "Available image keys: ${bookInfo.imagePaths.keys.joinToString(", ")}")
         // Fallback text if image not found
         Text(
             text = imageInfo.alt ?: "[Image: ${imageInfo.src}]",

@@ -1,5 +1,6 @@
 package com.grid.app.presentation.fileviewer.ebook
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.grid.app.domain.model.EbookReadingPosition
@@ -31,6 +32,10 @@ class EbookViewModel @Inject constructor(
     private val ebookRepository: EbookRepository
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "EbookViewModel"
+    }
+
     private val _uiState = MutableStateFlow<EbookUiState>(EbookUiState.Loading)
     val uiState: StateFlow<EbookUiState> = _uiState.asStateFlow()
 
@@ -39,25 +44,33 @@ class EbookViewModel @Inject constructor(
     private var currentBookInfo: EpubBookInfo? = null
 
     fun loadEbook(file: File) {
+        Log.d(TAG, "loadEbook called for file: ${file.name}")
         currentFile = file
         
         viewModelScope.launch {
+            Log.d(TAG, "Setting state to Loading")
             _uiState.value = EbookUiState.Loading
             
             try {
+                Log.d(TAG, "Starting EPUB parsing...")
                 val parseResult = epubParser.parseEpub(file)
                 
                 if (parseResult.isSuccess) {
                     val bookInfo = parseResult.getOrThrow()
                     currentBookInfo = bookInfo
                     
+                    Log.d(TAG, "EPUB parsed successfully - Title: '${bookInfo.title}', Chapters: ${bookInfo.totalChapters}")
+                    
                     // Check if there's a saved reading position
+                    Log.d(TAG, "Checking for saved reading position...")
                     val savedPosition = ebookRepository.getReadingPosition(file.absolutePath)
                     
                     if (savedPosition != null) {
+                        Log.d(TAG, "Found saved position at chapter ${savedPosition.spineIndex}")
                         // Show resume prompt
                         _uiState.value = EbookUiState.ResumePrompt(bookInfo, savedPosition)
                     } else {
+                        Log.d(TAG, "No saved position found, starting from beginning")
                         // Start from beginning
                         _uiState.value = EbookUiState.Success(
                             bookInfo = bookInfo,
@@ -66,11 +79,13 @@ class EbookViewModel @Inject constructor(
                     }
                 } else {
                     val error = parseResult.exceptionOrNull()
+                    Log.e(TAG, "EPUB parsing failed", error)
                     _uiState.value = EbookUiState.Error(
                         error?.message ?: "Failed to parse EPUB file"
                     )
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "Exception during ebook loading", e)
                 _uiState.value = EbookUiState.Error(
                     e.message ?: "An error occurred while loading the ebook"
                 )
@@ -79,8 +94,10 @@ class EbookViewModel @Inject constructor(
     }
 
     fun resumeReading() {
+        Log.d(TAG, "resumeReading called")
         val currentState = _uiState.value
         if (currentState is EbookUiState.ResumePrompt) {
+            Log.d(TAG, "Resuming reading at chapter ${currentState.savedPosition.spineIndex}")
             _uiState.value = EbookUiState.Success(
                 bookInfo = currentState.bookInfo,
                 currentChapterIndex = currentState.savedPosition.spineIndex,
@@ -90,8 +107,10 @@ class EbookViewModel @Inject constructor(
     }
 
     fun startFromBeginning() {
+        Log.d(TAG, "startFromBeginning called")
         val currentState = _uiState.value
         if (currentState is EbookUiState.ResumePrompt) {
+            Log.d(TAG, "Starting from beginning")
             _uiState.value = EbookUiState.Success(
                 bookInfo = currentState.bookInfo,
                 currentChapterIndex = 0
@@ -100,9 +119,11 @@ class EbookViewModel @Inject constructor(
     }
 
     fun navigateToChapter(chapterIndex: Int) {
+        Log.d(TAG, "navigateToChapter called with index: $chapterIndex")
         val currentState = _uiState.value
         if (currentState is EbookUiState.Success) {
             val newIndex = chapterIndex.coerceIn(0, currentState.bookInfo.totalChapters - 1)
+            Log.d(TAG, "Navigating to chapter $newIndex (clamped from $chapterIndex)")
             _uiState.value = currentState.copy(
                 currentChapterIndex = newIndex,
                 scrollOffset = 0f

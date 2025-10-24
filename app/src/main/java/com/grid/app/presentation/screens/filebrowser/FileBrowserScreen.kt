@@ -1016,11 +1016,16 @@ private fun getFileIcon(fileName: String): ImageVector {
         // Ebook files
         extension in setOf("epub", "mobi", "azw", "azw3", "fb2", "lit") -> Icons.AutoMirrored.Filled.MenuBook
         
-        // Text files
-        extension in setOf("txt", "md", "json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
+        // Markdown files
+        extension in setOf("md", "markdown") -> Icons.Default.Description
+        
+        // Code files
+        extension in setOf("json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
             "cpp", "c", "h", "cs", "php", "rb", "go", "rs", "swift", "yml", "yaml", "toml",
-            "properties", "ini", "cfg", "conf", "log", "csv", "sql", "sh", "bat", "dockerfile",
-            "gitignore", "gradle", "makefile", "readme") -> Icons.AutoMirrored.Filled.TextSnippet
+            "properties", "sql", "sh", "bat", "dockerfile", "gitignore", "gradle", "makefile") -> Icons.Default.Code
+        
+        // Plain text files
+        extension in setOf("txt", "ini", "cfg", "conf", "log", "csv", "readme") -> Icons.AutoMirrored.Filled.TextSnippet
         
         // Files without extension
         extension.isEmpty() -> Icons.AutoMirrored.Filled.TextSnippet

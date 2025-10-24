@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.GifDecoder
+import coil.decode.SvgDecoder
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
@@ -13,6 +14,7 @@ class GridApplication : Application(), ImageLoaderFactory {
         return ImageLoader.Builder(this)
             .components {
                 add(GifDecoder.Factory())
+                add(SvgDecoder.Factory())
             }
             .build()
     }

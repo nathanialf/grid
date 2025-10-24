@@ -173,7 +173,8 @@ class SmbClient @Inject constructor() : NetworkClient {
             val isDirectory = fileInfo.standardInformation.isDirectory
             
             if (isDirectory) {
-                share.rmdir(path, true)
+                // Recursively delete directory contents first
+                deleteDirectoryRecursive(share, path)
             } else {
                 share.rm(path)
             }
@@ -181,6 +182,45 @@ class SmbClient @Inject constructor() : NetworkClient {
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
+        }
+    }
+    
+    private fun deleteDirectoryRecursive(share: DiskShare, path: String) {
+        try {
+            // List all items in the directory
+            val items = share.list(path)
+            
+            for (item in items) {
+                // Skip . and .. entries
+                if (item.fileName == "." || item.fileName == "..") {
+                    continue
+                }
+                
+                val itemPath = if (path.endsWith("/")) {
+                    "$path${item.fileName}"
+                } else {
+                    "$path/${item.fileName}"
+                }
+                
+                val itemInfo = share.getFileInformation(itemPath)
+                if (itemInfo.standardInformation.isDirectory) {
+                    // Recursively delete subdirectory
+                    deleteDirectoryRecursive(share, itemPath)
+                } else {
+                    // Delete file
+                    share.rm(itemPath)
+                }
+            }
+            
+            // Finally, delete the empty directory
+            share.rmdir(path, true)
+        } catch (e: Exception) {
+            // If the recursive delete fails, try to force delete the directory
+            try {
+                share.rmdir(path, true)
+            } catch (fallbackEx: Exception) {
+                throw e // Throw the original exception
+            }
         }
     }
     

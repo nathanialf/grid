@@ -157,7 +157,8 @@ class FtpClient @Inject constructor() : NetworkClient {
             val targetFile = files.find { it.name == fileName }
             
             val success = if (targetFile?.isDirectory == true) {
-                client.removeDirectory(path)
+                // Recursively delete directory contents
+                deleteDirectoryRecursive(client, path)
             } else {
                 client.deleteFile(path)
             }
@@ -169,6 +170,47 @@ class FtpClient @Inject constructor() : NetworkClient {
             }
         } catch (e: Exception) {
             Result.Error(Exception("Failed to delete file: ${e.message}", e))
+        }
+    }
+    
+    private fun deleteDirectoryRecursive(client: FTPClient, dirPath: String): Boolean {
+        try {
+            // List all items in the directory
+            val items = client.listFiles(dirPath)
+            
+            for (item in items) {
+                // Skip . and .. entries
+                if (item.name == "." || item.name == "..") {
+                    continue
+                }
+                
+                val itemPath = if (dirPath.endsWith("/")) {
+                    "$dirPath${item.name}"
+                } else {
+                    "$dirPath/${item.name}"
+                }
+                
+                if (item.isDirectory) {
+                    // Recursively delete subdirectory
+                    deleteDirectoryRecursive(client, itemPath)
+                } else {
+                    // Delete file
+                    if (!client.deleteFile(itemPath)) {
+                        println("FTP: Failed to delete file: $itemPath")
+                    }
+                }
+            }
+            
+            // Finally, delete the empty directory
+            return client.removeDirectory(dirPath)
+        } catch (e: Exception) {
+            println("FTP: Error during recursive delete: ${e.message}")
+            // Try to delete the directory anyway
+            return try {
+                client.removeDirectory(dirPath)
+            } catch (fallbackEx: Exception) {
+                false
+            }
         }
     }
     

@@ -191,7 +191,8 @@ class SftpClient @Inject constructor(
             
             val attrs = client.stat(path)
             if (attrs.isDirectory) {
-                client.rmdir(path)
+                // Recursively delete directory contents
+                deleteDirectoryRecursive(client, path)
             } else {
                 client.remove(path)
             }
@@ -199,6 +200,45 @@ class SftpClient @Inject constructor(
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
+        }
+    }
+    
+    private fun deleteDirectoryRecursive(client: ApacheSftpClient, dirPath: String) {
+        try {
+            // List all items in the directory
+            val items = client.readDir(dirPath)
+            
+            for (item in items) {
+                // Skip . and .. entries
+                if (item.filename == "." || item.filename == "..") {
+                    continue
+                }
+                
+                val itemPath = if (dirPath.endsWith("/")) {
+                    "$dirPath${item.filename}"
+                } else {
+                    "$dirPath/${item.filename}"
+                }
+                
+                if (item.attributes.isDirectory) {
+                    // Recursively delete subdirectory
+                    deleteDirectoryRecursive(client, itemPath)
+                } else {
+                    // Delete file
+                    client.remove(itemPath)
+                }
+            }
+            
+            // Finally, delete the empty directory
+            client.rmdir(dirPath)
+        } catch (e: Exception) {
+            println("SFTP: Error during recursive delete: ${e.message}")
+            // Try to delete the directory anyway
+            try {
+                client.rmdir(dirPath)
+            } catch (fallbackEx: Exception) {
+                throw e // Throw the original exception
+            }
         }
     }
     

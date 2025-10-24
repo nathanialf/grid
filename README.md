@@ -23,7 +23,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
 - **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations (auto-exits on download start)
-- **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling
+- **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling and recursive directory deletion for non-empty folders
 - **File Sorting**: Sort files by name, type, or last modified date with session persistence
 - **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
@@ -43,11 +43,7 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### ⚠️ Known Issues
 - **Directory Downloads**: Directory downloads are skipped (files only for now)
-- **Audio Streaming**: Audio files are cached locally before playback rather than streaming directly (future enhancement)
 
-### 🚧 In Development
-- Directory download support with recursive file extraction
-- File search and filtering capabilities
 
 ## Features
 
@@ -192,7 +188,7 @@ For biometric authentication (optional):
 - Browse remote directories with pull-to-refresh functionality
 - Download files to local storage (accessible Downloads folder)
 - Upload files from device with real-time progress indicators
-- Create, rename, and delete files/folders with confirmation dialogs
+- Create, rename, and delete files/folders with confirmation dialogs (includes recursive deletion of non-empty directories)
 - Multi-select mode for batch operations
 - Open text, image, PDF, audio, video, archive, code, ebook, and markdown files with built-in viewers featuring smooth keyboard scrolling for text editing, pinch-to-zoom and pan gestures, advanced EPUB ebook reading with swipe navigation, rich text formatting, image support, scroll position preservation, code syntax highlighting with line numbers, and rich markdown rendering
 - Extract archive files (ZIP, RAR, 7-Zip, TAR, GZIP) with real-time progress tracking and automatic server upload

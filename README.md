@@ -10,13 +10,14 @@ A modern Android application for browsing and managing files on remote servers t
 - **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
-- **File Opening**: Open text, image, PDF, audio, video, archive, and ebook files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player, archive viewer, ebook viewer with chapter navigation)
+- **File Opening**: Open text, image, PDF, audio, video, archive, code, and ebook files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player, archive viewer, code viewer with syntax highlighting, ebook viewer with chapter navigation)
 - **Archive Viewer**: Browse and extract ZIP, RAR, 7-Zip, TAR, and GZIP archives with hierarchical tree navigation, file metadata display, and one-click extraction with progress tracking
 - **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
 - **Ebook Viewer**: Advanced EPUB ebook reader with HorizontalPager chapter navigation, swipe gestures, reading position persistence with scroll preservation, comprehensive text formatting (bold, italic, underline, strikethrough, superscript, subscript, code highlighting), working images with native rendering, and immersive reading experience with auto-hiding controls
 - **Markdown Viewer**: Rich markdown rendering with proper formatting, headers, links, and theme-aware styling
+- **Code Viewer**: Advanced code viewer with syntax highlighting for 20+ programming languages (Kotlin, Java, JavaScript, TypeScript, Python, C++, C, C#, Go, Rust, PHP, Ruby, Swift, Dart, HTML, CSS, XML, JSON, YAML, Shell, SQL), line numbers with overflow detection, language detection from file extensions, edit mode support, and theme-aware color schemes
 - **Audio Player**: Enhanced audio player with responsive album art sizing, material color themes extracted from album art, metadata display (title, album, artist, year), wavy scrubbing progress bar with smooth animations, circular play button, auto-play functionality, and Android media notifications with monochrome app icon and seamless notification-to-app transitions
 - **Video Player**: Custom video player with ExoPlayer integration, wavy progress bar scrubbing with pause animation control, auto-hiding controls, pinch-to-zoom support, and Android media notifications with monochrome app icon and seamless playback state preservation
 - **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
@@ -193,7 +194,7 @@ For biometric authentication (optional):
 - Upload files from device with real-time progress indicators
 - Create, rename, and delete files/folders with confirmation dialogs
 - Multi-select mode for batch operations
-- Open text, image, PDF, audio, video, archive, ebook, and markdown files with built-in viewers featuring smooth keyboard scrolling for text editing, pinch-to-zoom and pan gestures, advanced EPUB ebook reading with swipe navigation, rich text formatting, image support, scroll position preservation, and rich markdown rendering
+- Open text, image, PDF, audio, video, archive, code, ebook, and markdown files with built-in viewers featuring smooth keyboard scrolling for text editing, pinch-to-zoom and pan gestures, advanced EPUB ebook reading with swipe navigation, rich text formatting, image support, scroll position preservation, code syntax highlighting with line numbers, and rich markdown rendering
 - Extract archive files (ZIP, RAR, 7-Zip, TAR, GZIP) with real-time progress tracking and automatic server upload
 - Play animated GIFs with automatic animation and zoom support
 - Access Grid files through other apps' file pickers via DocumentsProvider integration

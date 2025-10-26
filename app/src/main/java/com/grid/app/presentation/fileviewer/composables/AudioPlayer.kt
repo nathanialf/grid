@@ -1,10 +1,14 @@
 package com.grid.app.presentation.fileviewer.composables
 
 import android.content.ComponentName
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Pause
@@ -55,6 +59,11 @@ fun AudioPlayer(
     var isLoading by remember { mutableStateOf(true) }
     var audioMetadata by remember { mutableStateOf<AudioMetadata>(AudioMetadata()) }
     var albumArtColorScheme by remember { mutableStateOf<AlbumArtColorScheme?>(null) }
+    
+    // Animation states
+    var showAlbumArt by remember { mutableStateOf(false) }
+    var showMetadata by remember { mutableStateOf(false) }
+    var showControls by remember { mutableStateOf(false) }
     
     // Detect current theme
     val currentColorScheme = MaterialTheme.colorScheme
@@ -115,6 +124,15 @@ fun AudioPlayer(
         } catch (e: Exception) {
             error = "Error loading audio: ${e.message}"
             isLoading = false
+        }
+    }
+    
+    // Trigger all animations simultaneously when loading completes
+    LaunchedEffect(isLoading) {
+        if (!isLoading && error == null) {
+            showAlbumArt = true
+            showMetadata = true
+            showControls = true
         }
     }
     
@@ -193,9 +211,22 @@ fun AudioPlayer(
                     // Album art section - maximize size
                     val albumArtSize = minOf(maxWidth * 0.85f, maxHeight * 0.45f)
                     
-                    Card(
-                        modifier = Modifier.size(albumArtSize),
-                        shape = RoundedCornerShape(16.dp)
+                    // Album art with animation
+                    AnimatedVisibility(
+                        visible = showAlbumArt,
+                        enter = scaleIn(
+                            initialScale = 0.8f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(500, easing = FastOutSlowInEasing)
+                        )
+                    ) {
+                        Card(
+                            modifier = Modifier.size(albumArtSize),
+                            shape = RoundedCornerShape(16.dp)
                     ) {
                         val albumArt = audioMetadata.albumArt
                         if (albumArt != null) {
@@ -220,21 +251,37 @@ fun AudioPlayer(
                                 )
                             }
                         }
+                        }
                     }
                     
-                    // Track metadata
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.weight(1f, false)
-                    ) {
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        Text(
-                            text = audioMetadata.title ?: file.nameWithoutExtension,
-                            style = MaterialTheme.typography.headlineSmall,
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Bold
+                    // Track metadata with slide-in animation
+                    AnimatedVisibility(
+                        visible = showMetadata,
+                        enter = slideInVertically(
+                            initialOffsetY = { it / 2 },
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
                         )
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f, false)
+                        ) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            Text(
+                                text = audioMetadata.title ?: file.nameWithoutExtension,
+                                style = MaterialTheme.typography.headlineSmall,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold
+                            )
                         
                         audioMetadata.artist?.let { artist ->
                             Spacer(modifier = Modifier.height(8.dp))
@@ -265,12 +312,28 @@ fun AudioPlayer(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        }
                     }
                     
-                    // Bottom control section
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                    // Bottom control section with slide-up animation
+                    AnimatedVisibility(
+                        visible = showControls,
+                        enter = slideInVertically(
+                            initialOffsetY = { it },
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
                     ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                         // Time display
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -330,9 +393,20 @@ fun AudioPlayer(
                                 )
                             }
                             
-                            // Play/Pause button - circular
+                            // Play/Pause button - circular with pulse animation
+                            val playButtonScale by animateFloatAsState(
+                                targetValue = if (isPlaying) 1.05f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                ),
+                                label = "playButtonScale"
+                            )
+                            
                             Card(
-                                modifier = Modifier.size(64.dp),
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .scale(playButtonScale),
                                 shape = CircleShape,
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.primary
@@ -359,6 +433,7 @@ fun AudioPlayer(
                                     )
                                 }
                             }
+                        }
                         }
                     }
                 }

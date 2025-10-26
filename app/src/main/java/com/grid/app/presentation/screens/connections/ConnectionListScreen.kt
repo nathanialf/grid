@@ -1,7 +1,9 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.grid.app.presentation.screens.connections
 
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,6 +12,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -36,6 +40,7 @@ fun ConnectionListScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    
     
     // Cast context to FragmentActivity (MainActivity extends FragmentActivity)
     val activity = context as? FragmentActivity
@@ -89,10 +94,38 @@ fun ConnectionListScreen(
         },
         floatingActionButton = {
             // Only show add button when not requiring authentication or already authenticated
-            if (!uiState.requiresBiometric || uiState.isBiometricAuthenticated) {
+            AnimatedVisibility(
+                visible = !uiState.requiresBiometric || uiState.isBiometricAuthenticated,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(
+                        durationMillis = 300,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeIn(
+                    animationSpec = tween(300)
+                ),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(200)
+                ) + fadeOut(
+                    animationSpec = tween(200)
+                )
+            ) {
+                val fabScale by animateFloatAsState(
+                    targetValue = 1f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    ),
+                    label = "fabScale"
+                )
+                
                 ExtendedFloatingActionButton(
                     onClick = onNavigateToAddConnection,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .scale(fabScale)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
@@ -136,11 +169,34 @@ fun ConnectionListScreen(
             }
             
             uiState.connections.isEmpty() -> {
-                EmptyConnectionsView(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                )
+                var isVisible by remember { mutableStateOf(false) }
+                
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(200)
+                    isVisible = true
+                }
+                
+                AnimatedVisibility(
+                    visible = isVisible,
+                    enter = fadeIn(
+                        animationSpec = tween(
+                            durationMillis = 600,
+                            easing = FastOutSlowInEasing
+                        )
+                    ) + slideInVertically(
+                        initialOffsetY = { it / 4 },
+                        animationSpec = tween(
+                            durationMillis = 600,
+                            easing = FastOutSlowInEasing
+                        )
+                    )
+                ) {
+                    EmptyConnectionsView(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                    )
+                }
             }
             
             else -> {
@@ -156,7 +212,10 @@ fun ConnectionListScreen(
                     ),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    itemsIndexed(uiState.connections) { index, connection ->
+                    itemsIndexed(
+                        items = uiState.connections,
+                        key = { _, connection -> connection.id }
+                    ) { index, connection ->
                         ConnectionCard(
                             connection = connection,
                             onConnect = { onNavigateToFileBrowser(connection.id) },
@@ -206,6 +265,21 @@ fun ConnectionListScreen(
 private fun EmptyConnectionsView(
     modifier: Modifier = Modifier
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "emptyStateAnimation")
+    
+    val iconScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = 2000,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "iconScale"
+    )
+    
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -214,7 +288,9 @@ private fun EmptyConnectionsView(
         Icon(
             imageVector = Icons.Default.CloudOff,
             contentDescription = null,
-            modifier = Modifier.size(64.dp),
+            modifier = Modifier
+                .size(64.dp)
+                .scale(iconScale),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         

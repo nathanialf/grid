@@ -5,10 +5,14 @@ package com.grid.app.presentation.screens.filebrowser
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -60,6 +64,7 @@ fun FileBrowserScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    
     
     // Rename dialog state
     var showRenameDialog by remember { mutableStateOf(false) }
@@ -446,7 +451,10 @@ fun FileBrowserScreen(
                             }
                         }
                         
-                        items(uiState.files.filter { !it.isHidden || uiState.showHiddenFiles }) { file ->
+                        items(
+                            items = uiState.files.filter { !it.isHidden || uiState.showHiddenFiles },
+                            key = { file -> file.path }
+                        ) { file ->
                             FileGridItem(
                                 file = file,
                                 onClick = {
@@ -503,7 +511,10 @@ fun FileBrowserScreen(
                             }
                         }
                         
-                        items(uiState.files.filter { !it.isHidden || uiState.showHiddenFiles }) { file ->
+                        items(
+                            items = uiState.files.filter { !it.isHidden || uiState.showHiddenFiles },
+                            key = { file -> file.path }
+                        ) { file ->
                             FileItem(
                                 file = file,
                                 onClick = {

@@ -39,6 +39,8 @@ interface FileRepository {
     
     suspend fun uploadFile(connection: Connection, localPath: String, remotePath: String)
     
+    suspend fun uploadFileWithProgress(connection: Connection, localPath: String, remotePath: String): Flow<FileTransfer>
+    
     fun getActiveTransfers(): Flow<List<FileTransfer>>
     suspend fun cancelTransfer(transferId: String): Result<Unit>
     suspend fun pauseTransfer(transferId: String): Result<Unit>

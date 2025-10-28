@@ -352,6 +352,53 @@ class FileRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun uploadFileWithProgress(connection: Connection, localPath: String, remotePath: String): Flow<FileTransfer> = flow {
+        val credential = credentialRepository.getCredentialById(connection.credentialId)
+        
+        val client = networkClientFactory.createClient(connection.protocol)
+        
+        when (val connectResult = client.connect(connection, credential)) {
+            is Result.Success -> {
+                val transferId = java.util.UUID.randomUUID().toString()
+                val localFile = File(localPath)
+                val fileName = localFile.name
+                
+                val transfer = FileTransfer(
+                    id = transferId,
+                    localPath = localPath,
+                    remotePath = remotePath,
+                    fileName = fileName,
+                    isUpload = true,
+                    connectionId = connection.id,
+                    state = TransferState.IN_PROGRESS,
+                    progress = TransferProgress(0, localFile.length())
+                )
+                
+                emit(transfer)
+                
+                try {
+                    FileInputStream(localFile).use { inputStream ->
+                        client.uploadFile(inputStream, remotePath, localFile.length()).collect { progress ->
+                            val updatedTransfer = transfer.copy(
+                                progress = progress,
+                                state = if (progress.bytesTransferred >= progress.totalBytes) {
+                                    TransferState.COMPLETED
+                                } else {
+                                    TransferState.IN_PROGRESS
+                                }
+                            )
+                            emit(updatedTransfer)
+                        }
+                    }
+                } finally {
+                    client.disconnect()
+                }
+            }
+            is Result.Error -> throw connectResult.exception
+            is Result.Loading -> throw Exception("Unexpected loading state")
+        }
+    }
+    
     override fun getActiveTransfers(): Flow<List<FileTransfer>> {
         return _activeTransfers.asStateFlow()
     }

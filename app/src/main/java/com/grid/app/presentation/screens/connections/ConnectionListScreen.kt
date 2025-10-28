@@ -342,7 +342,6 @@ private fun ConnectionCard(
                 ) {
                     Icon(
                         imageVector = when (connection.protocol) {
-                            Protocol.FTP -> Icons.Default.Folder
                             Protocol.SFTP -> Icons.Default.Security
                             Protocol.SMB -> Icons.Default.Computer
                         },

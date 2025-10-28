@@ -125,7 +125,6 @@ dependencies {
     implementation(libs.smbj)
     implementation(libs.mina.core)
     implementation(libs.mina.sshd.client)
-    implementation(libs.commons.net)
     
     // Archive Handling
     implementation("org.apache.commons:commons-compress:1.24.0")

@@ -581,6 +581,16 @@ fun FileBrowserScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            
+                            IconButton(
+                                onClick = { viewModel.cancelUpload() }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Cancel upload",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         
                         WavyLinearProgressIndicator(

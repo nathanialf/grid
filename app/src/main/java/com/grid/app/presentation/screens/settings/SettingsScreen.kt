@@ -124,11 +124,10 @@ fun SettingsScreen(
                     }
                 )
                 
-                SettingsClickableItem(
+                SettingsInfoItem(
                     title = "Version",
                     subtitle = "1.0.0",
-                    icon = Icons.Default.Info,
-                    onClick = { /* TODO: Show version info */ }
+                    icon = Icons.Default.Info
                 )
             }
         }
@@ -315,6 +314,41 @@ private fun SettingsClickableItem(
                 imageVector = Icons.Default.ChevronRight,
                 contentDescription = "Open",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsInfoItem(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        
+        Spacer(modifier = Modifier.width(16.dp))
+        
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }

@@ -8,7 +8,6 @@ import com.grid.app.data.local.EncryptionManager
 import com.grid.app.data.local.PreferencesManager
 import com.grid.app.data.local.BiometricManager
 import com.grid.app.data.remote.NetworkClientFactory
-import com.grid.app.data.remote.FtpClient
 import com.grid.app.data.remote.SftpClient
 import com.grid.app.data.remote.SmbClient
 import com.grid.app.data.repository.ConnectionRepositoryImpl
@@ -67,12 +66,6 @@ object DataModule {
     
     @Provides
     @Singleton
-    fun provideFtpClient(): FtpClient {
-        return FtpClient()
-    }
-    
-    @Provides
-    @Singleton
     fun provideSftpClient(@ApplicationContext context: android.content.Context): SftpClient {
         return SftpClient(context)
     }
@@ -86,11 +79,10 @@ object DataModule {
     @Provides
     @Singleton
     fun provideNetworkClientFactory(
-        ftpClient: FtpClient,
         sftpClient: SftpClient,
         smbClient: SmbClient
     ): NetworkClientFactory {
-        return NetworkClientFactory(ftpClient, sftpClient, smbClient)
+        return NetworkClientFactory(sftpClient, smbClient)
     }
 }
 

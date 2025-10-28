@@ -218,7 +218,6 @@ private fun ConnectionForm(
                             )
                             Text(
                                 text = when (protocol) {
-                                    Protocol.FTP -> "File Transfer Protocol"
                                     Protocol.SFTP -> "SSH File Transfer Protocol"
                                     Protocol.SMB -> "Server Message Block"
                                 },
@@ -285,8 +284,8 @@ private fun ConnectionForm(
                     )
                 }
                 
-                // Starting Directory field (for FTP and SFTP only)
-                if (formData.protocol in listOf(Protocol.FTP, Protocol.SFTP)) {
+                // Starting Directory field (for SFTP only)
+                if (formData.protocol == Protocol.SFTP) {
                     OutlinedTextField(
                         value = formData.startingDirectory,
                         onValueChange = { onFormDataChange(formData.copy(startingDirectory = it)) },
@@ -478,7 +477,7 @@ private fun ConnectionForm(
 
 data class ConnectionFormData(
     val name: String = "",
-    val protocol: Protocol = Protocol.FTP,
+    val protocol: Protocol = Protocol.SFTP,
     val hostname: String = "",
     val port: String = "",
     val username: String = "",

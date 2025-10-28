@@ -1,12 +1,11 @@
 # Grid - Android Server File Browser
 
-A modern Android application for browsing and managing files on remote servers through FTP, SFTP, and SMB protocols. Built with Clean Architecture principles and the latest Android development technologies.
+A modern Android application for browsing and managing files on remote servers through SFTP and SMB protocols. Built with Clean Architecture principles and the latest Android development technologies.
 
 ## Current Status
 
 ### ✅ Working Features
 - **SMB/CIFS**: Successfully connects to Windows shares and SMB servers with full file browsing
-- **FTP**: File Transfer Protocol with reliable connection and file operations
 - **SFTP**: SSH File Transfer Protocol with secure authentication and full functionality
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
@@ -38,7 +37,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **System UI**: Adaptive status bar colors that automatically adjust to light/dark theme
 - **Architecture**: Clean Architecture implementation with Hilt DI
 - **Secure Storage**: Android Keystore encryption for credentials
-- **Connection Management**: Add, edit, test, and manage server connections with configurable starting directories for FTP/SFTP
+- **Connection Management**: Add, edit, test, and manage server connections with configurable starting directories for SFTP
 - **About Section**: Developer information with clickable website link and version info
 
 ### ⚠️ Known Issues
@@ -49,8 +48,7 @@ A modern Android application for browsing and managing files on remote servers t
 
 ### Protocol Support
 - **SMB** - Server Message Block for Windows file sharing (✅ Fully functional)
-- **FTP** - File Transfer Protocol with secure authentication (✅ Fully functional)
-- **SFTP** - SSH File Transfer Protocol with password authentication (✅ Fully functional)
+- **SFTP** - SSH File Transfer Protocol with secure authentication (✅ Fully functional)
 
 ### Security & Storage
 - **Encrypted Credentials** - Android Keystore integration for secure credential storage
@@ -70,7 +68,7 @@ A modern Android application for browsing and managing files on remote servers t
 app/src/main/java/com/grid/app/
 ├── data/
 │   ├── local/          # Local storage and encryption
-│   ├── remote/         # Network clients (FTP, SFTP, SMB)
+│   ├── remote/         # Network clients (SFTP, SMB)
 │   └── repository/     # Repository implementations
 ├── domain/
 │   ├── model/          # Domain entities
@@ -91,7 +89,6 @@ app/src/main/java/com/grid/app/
 - **Android Keystore** for credential encryption
 
 ### Network Libraries
-- **Apache Commons Net** - FTP client implementation
 - **Apache MINA SSHD** - SFTP client with SSH support
 - **SMBJ** - SMB/CIFS client for Windows file sharing
 
@@ -168,12 +165,12 @@ For biometric authentication (optional):
 ### Adding a Server Connection
 1. Open the Grid application
 2. Tap "Add Connection"
-3. Select protocol (FTP, SFTP, or SMB)
+3. Select protocol (SFTP or SMB)
 4. Enter server details:
    - Hostname/IP address
    - Port (optional, uses protocol defaults)
    - Username and password/SSH key
-   - Starting directory (optional, for FTP/SFTP only)
+   - Starting directory (optional, for SFTP only)
 5. Test the connection to verify settings
 6. Save the connection
 
@@ -251,7 +248,6 @@ For biometric authentication (optional):
 
 ## Acknowledgments
 
-- **Apache Commons Net** for FTP client implementation
 - **Apache MINA SSHD** for SFTP connectivity
 - **SMBJ** for SMB/CIFS protocol support
 - **Android Jetpack** for modern Android development components

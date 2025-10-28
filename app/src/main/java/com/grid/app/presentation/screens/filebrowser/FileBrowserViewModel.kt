@@ -21,6 +21,7 @@ import com.grid.app.domain.usecase.file.RenameFileUseCase
 import com.grid.app.domain.usecase.file.RenameDirUseCase
 import com.grid.app.domain.usecase.file.UploadFileUseCase
 import com.grid.app.domain.usecase.settings.GetSettingsUseCase
+import com.grid.app.domain.repository.FileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +43,8 @@ class FileBrowserViewModel @Inject constructor(
     private val deleteFileUseCase: DeleteFileUseCase,
     private val renameFileUseCase: RenameFileUseCase,
     private val renameDirUseCase: RenameDirUseCase,
-    private val getSettingsUseCase: GetSettingsUseCase
+    private val getSettingsUseCase: GetSettingsUseCase,
+    private val fileRepository: FileRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileBrowserUiState())
@@ -50,6 +52,9 @@ class FileBrowserViewModel @Inject constructor(
 
     private var currentConnection: Connection? = null
     private val downloadJobs = mutableMapOf<String, Job>()
+    private var currentUploadTransferId: String? = null
+    private var currentUploadJob: Job? = null
+    private var currentUploadRemotePath: String? = null
 
     fun initialize(connectionId: String, initialPath: String? = null) {
         viewModelScope.launch {
@@ -263,7 +268,16 @@ class FileBrowserViewModel @Inject constructor(
             "$currentPath/$fileName"
         }
 
-        viewModelScope.launch {
+        // Cancel any existing upload first
+        currentUploadJob?.cancel()
+        currentUploadJob = null
+        currentUploadTransferId = null
+        currentUploadRemotePath = null
+
+        // Store remote path for cleanup if needed
+        currentUploadRemotePath = remotePath
+
+        currentUploadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isUploading = true,
                 uploadProgress = 0f,
@@ -271,40 +285,130 @@ class FileBrowserViewModel @Inject constructor(
             )
 
             try {
-                // Simulate progress updates
-                for (progress in 1..10) {
-                    kotlinx.coroutines.delay(200)
-                    _uiState.value = _uiState.value.copy(
-                        uploadProgress = progress / 10f
-                    )
-                }
-                
                 // Create a temporary file from the URI
                 val tempFile = createTempFileFromUri(uri, fileName)
                 if (tempFile != null) {
-                    uploadFileUseCase(connection, tempFile.absolutePath, remotePath)
-                    // Clean up the temporary file
-                    tempFile.delete()
+                    try {
+                        // Use the UploadFileUseCase with progress tracking
+                        uploadFileUseCase.uploadWithProgress(connection, tempFile.absolutePath, remotePath)
+                            .collect { fileTransfer ->
+                                // Store transfer ID for cancellation
+                                if (currentUploadTransferId == null) {
+                                    currentUploadTransferId = fileTransfer.id
+                                }
+                                
+                                // Only process updates for the current upload
+                                if (fileTransfer.id == currentUploadTransferId && _uiState.value.isUploading) {
+                                    // Update progress based on actual file transfer progress
+                                    val progressPercent = fileTransfer.progress.progressPercent
+                                    _uiState.value = _uiState.value.copy(
+                                        uploadProgress = progressPercent / 100f
+                                    )
+                                }
+                                
+                                // Check if upload is completed (only for current upload)
+                                if (fileTransfer.id == currentUploadTransferId) {
+                                    when (fileTransfer.state) {
+                                        com.grid.app.domain.model.TransferState.COMPLETED -> {
+                                            currentUploadTransferId = null
+                                            currentUploadJob = null
+                                            currentUploadRemotePath = null
+                                            _uiState.value = _uiState.value.copy(
+                                                isUploading = false,
+                                                uploadProgress = 0f,
+                                                uploadFileName = "",
+                                                message = "Upload completed successfully"
+                                            )
+                                            refresh()
+                                        }
+                                        com.grid.app.domain.model.TransferState.FAILED -> {
+                                            currentUploadTransferId = null
+                                            currentUploadJob = null
+                                            currentUploadRemotePath = null
+                                            throw Exception(fileTransfer.errorMessage ?: "Upload failed")
+                                        }
+                                        com.grid.app.domain.model.TransferState.CANCELLED -> {
+                                            currentUploadTransferId = null
+                                            currentUploadJob = null
+                                            currentUploadRemotePath = null
+                                            _uiState.value = _uiState.value.copy(
+                                                isUploading = false,
+                                                uploadProgress = 0f,
+                                                uploadFileName = "",
+                                                message = "Upload cancelled"
+                                            )
+                                        }
+                                        else -> {
+                                            // IN_PROGRESS or other states - do nothing, already handled above
+                                        }
+                                    }
+                                }
+                            }
+                    } finally {
+                        // Always clean up the temporary file, even if cancelled
+                        tempFile.delete()
+                    }
                 } else {
                     throw Exception("Failed to read file from URI")
                 }
-                
-                _uiState.value = _uiState.value.copy(
-                    isUploading = false,
-                    uploadProgress = 0f,
-                    uploadFileName = "",
-                    message = "Upload completed successfully"
-                )
-                refresh()
             } catch (exception: Exception) {
+                currentUploadTransferId = null
+                currentUploadJob = null
+                currentUploadRemotePath = null
                 _uiState.value = _uiState.value.copy(
                     isUploading = false,
                     uploadProgress = 0f,
                     uploadFileName = "",
-                    error = "Upload failed: ${exception.message}"
+                    error = if (exception is kotlinx.coroutines.CancellationException) {
+                        null // Don't show error for cancelled uploads
+                    } else {
+                        "Upload failed: ${exception.message}"
+                    }
                 )
             }
         }
+    }
+
+    fun cancelUpload() {
+        // Cancel the coroutine job first
+        currentUploadJob?.cancel()
+        currentUploadJob = null
+        
+        val transferId = currentUploadTransferId
+        val remotePath = currentUploadRemotePath
+        val connection = currentConnection
+        
+        if (transferId != null) {
+            viewModelScope.launch {
+                try {
+                    fileRepository.cancelTransfer(transferId)
+                } catch (exception: Exception) {
+                    // Ignore cancellation errors since we're already cancelling
+                }
+            }
+        }
+        
+        // Clean up partial file on server if upload was in progress
+        if (remotePath != null && connection != null) {
+            viewModelScope.launch {
+                try {
+                    // Use the DeleteFileUseCase to clean up the partial file
+                    deleteFileUseCase(connection, remotePath)
+                } catch (exception: Exception) {
+                    // Ignore deletion errors - partial file might not exist or be deletable
+                }
+            }
+        }
+        
+        // Reset UI state immediately
+        currentUploadTransferId = null
+        currentUploadRemotePath = null
+        _uiState.value = _uiState.value.copy(
+            isUploading = false,
+            uploadProgress = 0f,
+            uploadFileName = "",
+            message = "Upload cancelled"
+        )
     }
 
     fun createDirectory(directoryName: String) {

@@ -1,0 +1,444 @@
+package com.defnf.grid.presentation.fileviewer.composables
+
+import android.content.ComponentName
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.defnf.grid.presentation.fileviewer.AudioPlayerService
+import com.defnf.grid.presentation.fileviewer.MediaControllerManager
+import com.defnf.grid.presentation.fileviewer.components.WavyProgressBar
+import com.defnf.grid.presentation.fileviewer.models.AudioMetadata
+import com.defnf.grid.presentation.fileviewer.utils.extractAudioMetadata
+import com.defnf.grid.presentation.fileviewer.utils.formatTime
+import com.defnf.grid.presentation.fileviewer.utils.extractColorsFromAlbumArt
+import com.defnf.grid.presentation.fileviewer.utils.AlbumArtColorScheme
+import com.defnf.grid.presentation.fileviewer.utils.toMaterial3ColorScheme
+import kotlinx.coroutines.delay
+import java.io.File
+
+@Composable
+fun AudioPlayer(
+    file: File,
+    modifier: Modifier = Modifier,
+    fileName: String? = null,
+    connectionId: String? = null,
+    remotePath: String? = null
+) {
+    val context = LocalContext.current
+    var mediaController by remember { mutableStateOf<MediaController?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentPosition by remember { mutableStateOf(0L) }
+    var duration by remember { mutableStateOf(0L) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var audioMetadata by remember { mutableStateOf<AudioMetadata>(AudioMetadata()) }
+    var albumArtColorScheme by remember { mutableStateOf<AlbumArtColorScheme?>(null) }
+    
+    // Animation states
+    var showAlbumArt by remember { mutableStateOf(false) }
+    var showMetadata by remember { mutableStateOf(false) }
+    var showControls by remember { mutableStateOf(false) }
+    
+    // Detect current theme
+    val currentColorScheme = MaterialTheme.colorScheme
+    val isDarkTheme = currentColorScheme.background.luminance() < 0.5f
+    
+    // Initialize MediaController with streaming support
+    LaunchedEffect(file.absolutePath) {
+        try {
+            isLoading = true
+            error = null
+            
+            // Extract metadata first
+            val metadata = extractAudioMetadata(file)
+            audioMetadata = metadata
+            
+            // Extract colors from album art if available
+            metadata.albumArt?.let { bitmap ->
+                albumArtColorScheme = extractColorsFromAlbumArt(bitmap, isDarkTheme)
+            }
+            
+            // Get or create MediaController through manager
+            val controller = MediaControllerManager.getAudioController(
+                context, file, fileName, connectionId, remotePath
+            )
+            
+            if (controller != null) {
+                // Only set media if this is a new controller or different file
+                if (controller.currentMediaItem?.localConfiguration?.uri?.toString() != file.toURI().toString()) {
+                    // Create media item with metadata
+                    val mediaMetadata = MediaMetadata.Builder()
+                        .setTitle(metadata.title ?: file.nameWithoutExtension)
+                        .setArtist(metadata.artist ?: "Unknown Artist")
+                        .setAlbumTitle(metadata.album ?: "Unknown Album")
+                        .build()
+                    
+                    val mediaItem = MediaItem.Builder()
+                        .setUri(file.toURI().toString())
+                        .setMediaMetadata(mediaMetadata)
+                        .build()
+                    
+                    controller.setMediaItem(mediaItem)
+                    controller.prepare()
+                    
+                    // Auto-play when ready if not already playing
+                    if (!controller.isPlaying) {
+                        controller.play()
+                    }
+                }
+                
+                mediaController = controller
+                duration = controller.duration.coerceAtLeast(0L)
+                isLoading = false
+            } else {
+                error = "Error connecting to media service"
+                isLoading = false
+            }
+            
+        } catch (e: Exception) {
+            error = "Error loading audio: ${e.message}"
+            isLoading = false
+        }
+    }
+    
+    // Trigger all animations simultaneously when loading completes
+    LaunchedEffect(isLoading) {
+        if (!isLoading && error == null) {
+            showAlbumArt = true
+            showMetadata = true
+            showControls = true
+        }
+    }
+    
+    // Update progress
+    LaunchedEffect(mediaController) {
+        while (true) {
+            mediaController?.let { player ->
+                currentPosition = player.currentPosition
+                duration = player.duration.coerceAtLeast(0L)
+                isPlaying = player.isPlaying
+            }
+            delay(100) // Update more frequently for smooth progress
+        }
+    }
+    
+    // Cleanup - Don't release here since it's managed by MediaControllerManager
+    DisposableEffect(file) {
+        onDispose {
+            // MediaController is managed by MediaControllerManager
+            // Don't release it here to maintain playback across activities
+        }
+    }
+    
+    // Apply album art colors if available, otherwise use system colors
+    val effectiveColorScheme = albumArtColorScheme?.toMaterial3ColorScheme(currentColorScheme) ?: currentColorScheme
+    
+    MaterialTheme(
+        colorScheme = effectiveColorScheme
+    ) {
+        BoxWithConstraints(
+            modifier = modifier.fillMaxSize()
+        ) {
+            val maxHeight = maxHeight
+            val maxWidth = maxWidth
+            
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+            when {
+                isLoading -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Loading audio...")
+                    }
+                }
+                error != null -> {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = error!!,
+                            color = MaterialTheme.colorScheme.error,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+                else -> {
+                    // Album art section - maximize size
+                    val albumArtSize = minOf(maxWidth * 0.85f, maxHeight * 0.45f)
+                    
+                    // Album art with animation
+                    AnimatedVisibility(
+                        visible = showAlbumArt,
+                        enter = scaleIn(
+                            initialScale = 0.8f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(500, easing = FastOutSlowInEasing)
+                        )
+                    ) {
+                        Card(
+                            modifier = Modifier.size(albumArtSize),
+                            shape = RoundedCornerShape(16.dp)
+                    ) {
+                        val albumArt = audioMetadata.albumArt
+                        if (albumArt != null) {
+                            androidx.compose.foundation.Image(
+                                bitmap = albumArt.asImageBitmap(),
+                                contentDescription = "Album Art",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Audio file",
+                                    modifier = Modifier.size(albumArtSize * 0.3f),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        }
+                    }
+                    
+                    // Track metadata with slide-in animation
+                    AnimatedVisibility(
+                        visible = showMetadata,
+                        enter = slideInVertically(
+                            initialOffsetY = { it / 2 },
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.weight(1f, false)
+                        ) {
+                            Spacer(modifier = Modifier.height(24.dp))
+                            
+                            Text(
+                                text = audioMetadata.title ?: file.nameWithoutExtension,
+                                style = MaterialTheme.typography.headlineSmall,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Bold
+                            )
+                        
+                        audioMetadata.artist?.let { artist ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        audioMetadata.album?.let { album ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = album,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        audioMetadata.year?.let { year ->
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = year,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        }
+                    }
+                    
+                    // Bottom control section with slide-up animation
+                    AnimatedVisibility(
+                        visible = showControls,
+                        enter = slideInVertically(
+                            initialOffsetY = { it },
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
+                        ) + fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = FastOutSlowInEasing
+                            )
+                        )
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                        // Time display
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = formatTime(currentPosition.toInt()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = formatTime(duration.toInt()),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Wavy progress bar with scrubbing - no container
+                        WavyProgressBar(
+                            progress = if (duration > 0) currentPosition.toFloat() / duration else 0f,
+                            isPlaying = isPlaying,
+                            onSeek = { progress ->
+                                mediaController?.let { player ->
+                                    val seekPosition = (progress * duration).toLong()
+                                    player.seekTo(seekPosition)
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(32.dp)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        // Controls
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(24.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Stop button
+                            IconButton(
+                                onClick = {
+                                    mediaController?.let { player ->
+                                        player.pause()
+                                        player.seekTo(0)
+                                        isPlaying = false
+                                    }
+                                },
+                                enabled = mediaController != null
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Stop,
+                                    contentDescription = "Stop",
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                            
+                            // Play/Pause button - circular with pulse animation
+                            val playButtonScale by animateFloatAsState(
+                                targetValue = if (isPlaying) 1.05f else 1f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                ),
+                                label = "playButtonScale"
+                            )
+                            
+                            Card(
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .scale(playButtonScale),
+                                shape = CircleShape,
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                onClick = {
+                                    mediaController?.let { player ->
+                                        if (isPlaying) {
+                                            player.pause()
+                                        } else {
+                                            player.play()
+                                        }
+                                    }
+                                }
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = if (isPlaying) "Pause" else "Play",
+                                        modifier = Modifier.size(32.dp),
+                                        tint = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                }
+                            }
+                        }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+}

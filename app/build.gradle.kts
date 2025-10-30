@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.grid.app"
+    namespace = "com.defnf.grid"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.grid.app"
+        applicationId = "com.defnf.grid"
         minSdk = 24
         targetSdk = 35
         versionCode = generateVersionCode()

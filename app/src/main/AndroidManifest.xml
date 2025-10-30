@@ -56,7 +56,7 @@
         <!-- Documents Provider for file picker integration -->
         <provider
             android:name=".data.provider.GridDocumentsProvider"
-            android:authorities="com.grid.app.documents"
+            android:authorities="com.defnf.grid.documents"
             android:exported="true"
             android:grantUriPermissions="true"
             android:permission="android.permission.MANAGE_DOCUMENTS">

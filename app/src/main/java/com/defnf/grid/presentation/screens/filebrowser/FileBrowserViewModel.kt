@@ -163,7 +163,8 @@ class FileBrowserViewModel @Inject constructor(
                 }
                 
                 // Create cache filename that includes connection and path info to avoid conflicts
-                val cacheFileName = "${connection.id}_${file.path.replace('/', '_')}_${file.name}"
+                // Replace both forward and backward slashes to handle both SFTP and SMB paths
+                val cacheFileName = "${connection.id}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
                 val tempFile = File(tempDir, cacheFileName)
                 
                 // Check if file is already cached and valid
@@ -414,13 +415,15 @@ class FileBrowserViewModel @Inject constructor(
     fun createDirectory(directoryName: String) {
         val connection = currentConnection ?: return
         val currentPath = _uiState.value.currentPath
+        // Use appropriate path separator based on protocol
+        val separator = if (connection.protocol.name == "SMB") "\\" else "/"
 
         viewModelScope.launch {
             try {
-                val fullPath = if (currentPath.endsWith("/")) {
+                val fullPath = if (currentPath.endsWith(separator)) {
                     "$currentPath$directoryName"
                 } else {
-                    "$currentPath/$directoryName"
+                    "$currentPath$separator$directoryName"
                 }
 
                 createDirectoryUseCase(connection, fullPath)

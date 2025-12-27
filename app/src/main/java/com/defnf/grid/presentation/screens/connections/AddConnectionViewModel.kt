@@ -12,6 +12,7 @@ import com.defnf.grid.domain.usecase.connection.UpdateConnectionUseCase
 import com.defnf.grid.domain.usecase.credential.CreateCredentialUseCase
 import com.defnf.grid.domain.usecase.credential.GetCredentialUseCase
 import com.defnf.grid.domain.usecase.credential.UpdateCredentialUseCase
+import com.defnf.grid.data.local.SshKeyManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,20 +29,90 @@ class AddConnectionViewModel @Inject constructor(
     private val createCredentialUseCase: CreateCredentialUseCase,
     private val updateCredentialUseCase: UpdateCredentialUseCase,
     private val getCredentialUseCase: GetCredentialUseCase,
-    private val testConnectionUseCase: TestConnectionUseCase
+    private val testConnectionUseCase: TestConnectionUseCase,
+    private val sshKeyManager: SshKeyManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddConnectionUiState())
     val uiState: StateFlow<AddConnectionUiState> = _uiState.asStateFlow()
 
+    companion object {
+        const val DEFAULT_KEY_NAME = "default"
+    }
+
+    init {
+        // Check if we already have a generated key
+        checkExistingKey()
+    }
+
+    private fun checkExistingKey() {
+        val hasKey = sshKeyManager.hasKeyPair(DEFAULT_KEY_NAME)
+        val publicKey = if (hasKey) sshKeyManager.getPublicKey(DEFAULT_KEY_NAME) else null
+        _uiState.value = _uiState.value.copy(
+            hasGeneratedKey = hasKey,
+            generatedPublicKey = publicKey
+        )
+    }
+
+    fun generateSshKey() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isGeneratingKey = true)
+            try {
+                val publicKey = sshKeyManager.generateKeyPair(DEFAULT_KEY_NAME, 4096)
+                val privateKey = sshKeyManager.getPrivateKey(DEFAULT_KEY_NAME)
+
+                _uiState.value = _uiState.value.copy(
+                    isGeneratingKey = false,
+                    hasGeneratedKey = true,
+                    generatedPublicKey = publicKey,
+                    formData = _uiState.value.formData.copy(
+                        sshKey = privateKey ?: "",
+                        useGeneratedKey = true
+                    )
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isGeneratingKey = false,
+                    error = "Failed to generate SSH key: ${e.message}"
+                )
+            }
+        }
+    }
+
+    fun useGeneratedKey() {
+        val privateKey = sshKeyManager.getPrivateKey(DEFAULT_KEY_NAME)
+        if (privateKey != null) {
+            _uiState.value = _uiState.value.copy(
+                formData = _uiState.value.formData.copy(
+                    sshKey = privateKey,
+                    useGeneratedKey = true
+                )
+            )
+        }
+    }
+
+    fun clearSshKey() {
+        _uiState.value = _uiState.value.copy(
+            formData = _uiState.value.formData.copy(
+                sshKey = "",
+                useGeneratedKey = false
+            )
+        )
+    }
+
     fun loadConnection(connectionId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            
+
             try {
                 val connection = getConnectionUseCase(connectionId)
                 val credential = getCredentialUseCase(connection.credentialId)
-                
+
+                // Check if the stored private key matches the generated key
+                val generatedPrivateKey = sshKeyManager.getPrivateKey(DEFAULT_KEY_NAME)
+                val isUsingGeneratedKey = !credential.privateKey.isNullOrEmpty() &&
+                    credential.privateKey == generatedPrivateKey
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     formData = ConnectionFormData(
@@ -53,7 +124,8 @@ class AddConnectionViewModel @Inject constructor(
                         password = credential.password,
                         sshKey = credential.privateKey ?: "",
                         shareName = connection.shareName ?: "",
-                        startingDirectory = connection.startingDirectory ?: ""
+                        startingDirectory = connection.startingDirectory ?: "",
+                        useGeneratedKey = isUsingGeneratedKey
                     ),
                     isEditMode = true,
                     connectionId = connectionId,
@@ -200,5 +272,8 @@ data class AddConnectionUiState(
     val connectionId: String? = null,
     val credentialId: String? = null,
     val error: String? = null,
-    val testResult: String? = null
+    val testResult: String? = null,
+    val isGeneratingKey: Boolean = false,
+    val hasGeneratedKey: Boolean = false,
+    val generatedPublicKey: String? = null
 )

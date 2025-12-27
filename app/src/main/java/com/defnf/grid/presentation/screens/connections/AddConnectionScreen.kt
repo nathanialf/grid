@@ -3,6 +3,7 @@
 package com.defnf.grid.presentation.screens.connections
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -80,6 +81,12 @@ fun AddConnectionScreen(
             error = uiState.error,
             onClearError = viewModel::clearError,
             onClearTestResult = viewModel::clearTestResult,
+            hasGeneratedKey = uiState.hasGeneratedKey,
+            generatedPublicKey = uiState.generatedPublicKey,
+            isGeneratingKey = uiState.isGeneratingKey,
+            onGenerateKey = viewModel::generateSshKey,
+            onUseGeneratedKey = viewModel::useGeneratedKey,
+            onClearKey = viewModel::clearSshKey,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
@@ -147,6 +154,12 @@ fun EditConnectionScreen(
             error = uiState.error,
             onClearError = viewModel::clearError,
             onClearTestResult = viewModel::clearTestResult,
+            hasGeneratedKey = uiState.hasGeneratedKey,
+            generatedPublicKey = uiState.generatedPublicKey,
+            isGeneratingKey = uiState.isGeneratingKey,
+            onGenerateKey = viewModel::generateSshKey,
+            onUseGeneratedKey = viewModel::useGeneratedKey,
+            onClearKey = viewModel::clearSshKey,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
@@ -164,6 +177,12 @@ private fun ConnectionForm(
     error: String? = null,
     onClearError: () -> Unit = {},
     onClearTestResult: () -> Unit = {},
+    hasGeneratedKey: Boolean = false,
+    generatedPublicKey: String? = null,
+    isGeneratingKey: Boolean = false,
+    onGenerateKey: () -> Unit = {},
+    onUseGeneratedKey: () -> Unit = {},
+    onClearKey: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
@@ -348,16 +367,14 @@ private fun ConnectionForm(
                 )
                 
                 if (formData.protocol == Protocol.SFTP) {
-                    OutlinedTextField(
-                        value = formData.sshKey,
-                        onValueChange = { onFormDataChange(formData.copy(sshKey = it)) },
-                        label = { Text("SSH Private Key (optional)") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Key, contentDescription = null)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 6
+                    SshKeySection(
+                        formData = formData,
+                        hasGeneratedKey = hasGeneratedKey,
+                        generatedPublicKey = generatedPublicKey,
+                        isGeneratingKey = isGeneratingKey,
+                        onGenerateKey = onGenerateKey,
+                        onUseGeneratedKey = onUseGeneratedKey,
+                        onClearKey = onClearKey
                     )
                 }
             }
@@ -475,6 +492,193 @@ private fun ConnectionForm(
     }
 }
 
+@Composable
+private fun SshKeySection(
+    formData: ConnectionFormData,
+    hasGeneratedKey: Boolean,
+    generatedPublicKey: String?,
+    isGeneratingKey: Boolean,
+    onGenerateKey: () -> Unit,
+    onUseGeneratedKey: () -> Unit,
+    onClearKey: () -> Unit
+) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    var showPublicKey by remember { mutableStateOf(false) }
+
+    Card {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = "SSH Key Authentication",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Medium
+            )
+
+            if (hasGeneratedKey) {
+                // Key exists - show status and options
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Key,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "RSA Key Available",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Text(
+                                text = if (formData.useGeneratedKey) "Active" else "Not in use",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+
+                // Action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!formData.useGeneratedKey) {
+                        Button(
+                            onClick = onUseGeneratedKey,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Use Key")
+                        }
+                    } else {
+                        OutlinedButton(
+                            onClick = onClearKey,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Don't Use Key")
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { showPublicKey = !showPublicKey }
+                    ) {
+                        Icon(
+                            imageVector = if (showPublicKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(if (showPublicKey) "Hide" else "Show")
+                    }
+                }
+
+                // Show public key if requested
+                if (showPublicKey && generatedPublicKey != null) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Public Key (add to server)",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                IconButton(
+                                    onClick = {
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(generatedPublicKey))
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ContentCopy,
+                                        contentDescription = "Copy",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = generatedPublicKey,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                modifier = Modifier.horizontalScroll(rememberScrollState())
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Add this to ~/.ssh/authorized_keys on your server",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+
+                // Regenerate option
+                TextButton(
+                    onClick = onGenerateKey,
+                    enabled = !isGeneratingKey
+                ) {
+                    Text("Generate New Key")
+                }
+            } else {
+                // No key exists - show generate option
+                Text(
+                    text = "Generate an RSA key pair for passwordless authentication",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Button(
+                    onClick = onGenerateKey,
+                    enabled = !isGeneratingKey,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isGeneratingKey) {
+                        WavyCircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Generating...")
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Key,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Generate RSA Key")
+                    }
+                }
+            }
+        }
+    }
+}
+
 data class ConnectionFormData(
     val name: String = "",
     val protocol: Protocol = Protocol.SFTP,
@@ -484,7 +688,8 @@ data class ConnectionFormData(
     val password: String = "",
     val sshKey: String = "",
     val shareName: String = "",
-    val startingDirectory: String = ""
+    val startingDirectory: String = "",
+    val useGeneratedKey: Boolean = false
 ) {
     fun isValid(): Boolean {
         return name.isNotBlank() && 

@@ -57,9 +57,21 @@ class SftpClient @Inject constructor(
                 BuiltinDHFactories.VALUES,
                 ClientBuilder.DH2KEX
             )
-            @Suppress("UNCHECKED_CAST")
-            client.signatureFactories = ArrayList(BuiltinSignatures.VALUES) as MutableList<NamedFactory<Signature>>
-            
+
+            // Configure signature factories - prioritize modern RSA-SHA2 algorithms
+            // Modern OpenSSH servers reject the old ssh-rsa (SHA-1) algorithm
+            val signatureFactories = ArrayList<NamedFactory<Signature>>()
+            // Add RSA-SHA2-512 and RSA-SHA2-256 first (required for modern servers)
+            signatureFactories.add(BuiltinSignatures.rsaSHA512)
+            signatureFactories.add(BuiltinSignatures.rsaSHA256)
+            // Add other algorithms
+            for (sig in BuiltinSignatures.VALUES) {
+                if (sig != BuiltinSignatures.rsaSHA512 && sig != BuiltinSignatures.rsaSHA256) {
+                    signatureFactories.add(sig)
+                }
+            }
+            client.signatureFactories = signatureFactories
+
             // Configure compatibility settings
             client.serverKeyVerifier = org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier.INSTANCE
             
@@ -69,7 +81,46 @@ class SftpClient @Inject constructor(
             val session = connectFuture.verify(10000).session
             
             // Authenticate
-            val authenticated = if (credential.password.isNotEmpty()) {
+            val authenticated = if (!credential.privateKey.isNullOrEmpty()) {
+                try {
+                    println("SFTP: Starting SSH key authentication for user: ${credential.username}")
+                    val keyPair = loadKeyPair(credential.privateKey)
+                    if (keyPair != null) {
+                        session.addPublicKeyIdentity(keyPair)
+                        println("SFTP: SSH key identity added, attempting auth...")
+                        val authResult = session.auth()
+                        println("SFTP: Auth future created, verifying...")
+                        val isSuccess = authResult.verify(15000).isSuccess
+                        println("SFTP: SSH key auth result: $isSuccess")
+                        isSuccess
+                    } else {
+                        println("SFTP: Failed to parse SSH key, falling back to password")
+                        if (credential.password.isNotEmpty()) {
+                            session.addPasswordIdentity(credential.password)
+                            val authResult = session.auth()
+                            authResult.verify(15000).isSuccess
+                        } else {
+                            false
+                        }
+                    }
+                } catch (e: Exception) {
+                    println("SFTP: SSH key authentication failed: ${e.message}")
+                    e.printStackTrace()
+                    // Fall back to password if key auth fails
+                    if (credential.password.isNotEmpty()) {
+                        try {
+                            session.addPasswordIdentity(credential.password)
+                            val authResult = session.auth()
+                            authResult.verify(15000).isSuccess
+                        } catch (e2: Exception) {
+                            println("SFTP: Password fallback also failed: ${e2.message}")
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+            } else if (credential.password.isNotEmpty()) {
                 try {
                     println("SFTP: Starting password authentication for user: ${credential.username}")
                     session.addPasswordIdentity(credential.password)
@@ -84,9 +135,6 @@ class SftpClient @Inject constructor(
                     e.printStackTrace()
                     false
                 }
-            } else if (!credential.privateKey.isNullOrEmpty()) {
-                // TODO: Implement SSH key authentication
-                false
             } else {
                 false
             }
@@ -319,5 +367,79 @@ class SftpClient @Inject constructor(
     
     override fun isConnected(): Boolean {
         return sftpClient != null && session?.isOpen == true
+    }
+
+    private fun loadKeyPair(privateKeyContent: String): java.security.KeyPair? {
+        return try {
+            val cleanedKey = privateKeyContent.trim()
+            println("SFTP: Attempting to parse SSH key (${cleanedKey.length} chars)")
+            println("SFTP: Key format: ${cleanedKey.lines().firstOrNull()}")
+
+            // Check if user accidentally provided public key instead of private key
+            if (cleanedKey.startsWith("ssh-rsa ") || cleanedKey.startsWith("ssh-ed25519 ") ||
+                cleanedKey.startsWith("ecdsa-sha2-") || cleanedKey.startsWith("ssh-dss ")) {
+                println("SFTP: ERROR - This appears to be a PUBLIC key, not a private key!")
+                println("SFTP: Private keys should start with '-----BEGIN' (e.g., '-----BEGIN OPENSSH PRIVATE KEY-----')")
+                return null
+            }
+
+            // Try PKCS8 format first (generated by Java KeyPairGenerator)
+            if (cleanedKey.contains("-----BEGIN PRIVATE KEY-----")) {
+                println("SFTP: Detected PKCS8 format key, parsing manually")
+                return parsePkcs8Key(cleanedKey)
+            }
+
+            // Try Apache SSHD's key loading utilities for other formats (OpenSSH, PEM RSA)
+            val keyPairResourceParser = SecurityUtils.getKeyPairResourceParser()
+            val inputStream = java.io.ByteArrayInputStream(cleanedKey.toByteArray(Charsets.UTF_8))
+
+            val keyPairs = keyPairResourceParser.loadKeyPairs(
+                null,
+                org.apache.sshd.common.NamedResource.ofName("user-provided-key"),
+                null,
+                inputStream
+            )
+
+            if (keyPairs.isNotEmpty()) {
+                println("SFTP: Successfully loaded SSH key pair via Apache SSHD")
+                keyPairs.first()
+            } else {
+                println("SFTP: No key pairs found in provided content")
+                null
+            }
+        } catch (e: Exception) {
+            println("SFTP: Failed to parse SSH key: ${e.message}")
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun parsePkcs8Key(pemContent: String): java.security.KeyPair? {
+        return try {
+            // Extract base64 content between headers
+            val base64Content = pemContent
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replace("\\s".toRegex(), "")
+
+            val keyBytes = android.util.Base64.decode(base64Content, android.util.Base64.DEFAULT)
+            val keySpec = java.security.spec.PKCS8EncodedKeySpec(keyBytes)
+            val keyFactory = java.security.KeyFactory.getInstance("RSA")
+            val privateKey = keyFactory.generatePrivate(keySpec) as java.security.interfaces.RSAPrivateCrtKey
+
+            // Reconstruct public key from private key components
+            val publicKeySpec = java.security.spec.RSAPublicKeySpec(
+                privateKey.modulus,
+                privateKey.publicExponent
+            )
+            val publicKey = keyFactory.generatePublic(publicKeySpec)
+
+            println("SFTP: Successfully parsed PKCS8 RSA key")
+            java.security.KeyPair(publicKey, privateKey)
+        } catch (e: Exception) {
+            println("SFTP: Failed to parse PKCS8 key: ${e.message}")
+            e.printStackTrace()
+            null
+        }
     }
 }

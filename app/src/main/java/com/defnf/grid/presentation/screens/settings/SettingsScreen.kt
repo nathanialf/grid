@@ -23,6 +23,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.presentation.theme.GridTheme
 import android.content.Intent
 import android.net.Uri
+import com.defnf.grid.BuildConfig
 
 @Composable
 fun SettingsScreen(
@@ -126,7 +127,7 @@ fun SettingsScreen(
                 
                 SettingsInfoItem(
                     title = "Version",
-                    subtitle = "1.0.0",
+                    subtitle = BuildConfig.VERSION_NAME,
                     icon = Icons.Default.Info
                 )
             }

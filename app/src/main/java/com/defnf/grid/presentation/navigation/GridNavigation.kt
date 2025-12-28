@@ -6,6 +6,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.defnf.grid.presentation.screens.cache.CachedFilesScreen
 import com.defnf.grid.presentation.screens.connections.ConnectionListScreen
 import com.defnf.grid.presentation.screens.connections.AddConnectionScreen
 import com.defnf.grid.presentation.screens.connections.EditConnectionScreen
@@ -31,6 +32,9 @@ fun GridNavigation(
                 },
                 onNavigateToFileBrowser = { connectionId ->
                     navController.navigate(GridDestinations.FileBrowser.createRoute(connectionId))
+                },
+                onNavigateToCachedFiles = { connectionId ->
+                    navController.navigate(GridDestinations.CachedFiles.createRoute(connectionId))
                 },
                 onNavigateToSettings = {
                     navController.navigate(GridDestinations.Settings.route)
@@ -90,6 +94,19 @@ fun GridNavigation(
         
         composable(GridDestinations.Settings.route) {
             SettingsScreen(
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(
+            route = GridDestinations.CachedFiles.route,
+            arguments = listOf(navArgument("connectionId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val connectionId = backStackEntry.arguments?.getString("connectionId") ?: ""
+            CachedFilesScreen(
+                connectionId = connectionId,
                 onNavigateBack = {
                     navController.popBackStack()
                 }

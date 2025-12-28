@@ -1,8 +1,16 @@
 package com.defnf.grid.data.repository
 
+import android.app.Application
 import com.defnf.grid.data.remote.NetworkClient
 import com.defnf.grid.data.remote.NetworkClientFactory
-import com.defnf.grid.domain.model.*
+import com.defnf.grid.domain.model.CachedFile
+import com.defnf.grid.domain.model.Connection
+import com.defnf.grid.domain.model.Credential
+import com.defnf.grid.domain.model.FileTransfer
+import com.defnf.grid.domain.model.RemoteFile
+import com.defnf.grid.domain.model.Result
+import com.defnf.grid.domain.model.TransferProgress
+import com.defnf.grid.domain.model.TransferState
 import com.defnf.grid.domain.repository.CredentialRepository
 import com.defnf.grid.domain.repository.FileRepository
 import kotlinx.coroutines.flow.Flow
@@ -19,6 +27,7 @@ import javax.inject.Singleton
 
 @Singleton
 class FileRepositoryImpl @Inject constructor(
+    private val application: Application,
     private val networkClientFactory: NetworkClientFactory,
     private val credentialRepository: CredentialRepository
 ) : FileRepository {
@@ -479,28 +488,98 @@ class FileRepositoryImpl @Inject constructor(
     override suspend fun downloadFileToTemp(connection: Connection, file: RemoteFile): File {
         val credential = credentialRepository.getCredentialById(connection.credentialId)
         val client = networkClientFactory.createClient(connection.protocol)
-        
+
         when (val connectResult = client.connect(connection, credential)) {
             is Result.Success -> {
-                // Create temporary file
-                val tempDir = File(System.getProperty("java.io.tmpdir"), "grid_documents")
+                // Create connection-specific subdirectory for cached files
+                val tempDir = File(System.getProperty("java.io.tmpdir"), "grid_documents/${connection.id}")
                 if (!tempDir.exists()) {
                     tempDir.mkdirs()
                 }
-                
-                val tempFile = File(tempDir, "${System.currentTimeMillis()}_${file.name}")
-                
+
+                // Encode timestamp and remote path in filename
+                // Format: {timestamp}_{encodedRemotePath}
+                val encodedPath = file.path.replace('/', '|').replace('\\', '|')
+                val tempFile = File(tempDir, "${System.currentTimeMillis()}_$encodedPath")
+
                 // Download file using OutputStream
                 FileOutputStream(tempFile).use { outputStream ->
                     client.downloadFile(file.path, outputStream).collect { _ ->
                         // We can ignore progress for this use case
                     }
                 }
-                
+
                 return tempFile
             }
             is Result.Error -> throw connectResult.exception
             is Result.Loading -> throw Exception("Unexpected loading state")
         }
+    }
+
+    override fun getCachedFilesForConnection(connectionId: String): List<CachedFile> {
+        // Files are cached in opened_files directory by FileBrowserViewModel
+        val cacheDir = File(application.cacheDir, "opened_files")
+        if (!cacheDir.exists()) {
+            return emptyList()
+        }
+
+        return cacheDir.listFiles()?.mapNotNull { file ->
+            // Filename format from FileBrowserViewModel: {connectionId}_{encodedPath}_{filename}
+            if (file.isFile && file.name.startsWith("${connectionId}_")) {
+                val withoutConnectionId = file.name.removePrefix("${connectionId}_")
+                // The format is: encodedPath_filename where encodedPath has / and \ replaced with _
+                // We need to find the original filename - it's after the last segment
+                val fileName = file.name.substringAfterLast("_")
+                // Reconstruct the remote path by removing connectionId prefix and filename suffix
+                val encodedPath = withoutConnectionId.removeSuffix("_$fileName")
+                val remotePath = encodedPath.replace('_', '/')
+
+                CachedFile(
+                    name = fileName,
+                    path = file.absolutePath,
+                    remotePath = remotePath,
+                    size = file.length(),
+                    cachedAt = file.lastModified(),
+                    connectionId = connectionId
+                )
+            } else null
+        }?.sortedByDescending { it.cachedAt } ?: emptyList()
+    }
+
+    override fun clearCacheForConnection(connectionId: String): Boolean {
+        val cacheDir = File(application.cacheDir, "opened_files")
+        if (!cacheDir.exists()) {
+            return true
+        }
+
+        var allDeleted = true
+        cacheDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith("${connectionId}_")) {
+                if (!file.delete()) {
+                    allDeleted = false
+                }
+            }
+        }
+        return allDeleted
+    }
+
+    override fun deleteCachedFile(filePath: String): Boolean {
+        val file = File(filePath)
+        return if (file.exists()) {
+            file.delete()
+        } else {
+            true
+        }
+    }
+
+    override fun getCacheSizeForConnection(connectionId: String): Long {
+        val cacheDir = File(application.cacheDir, "opened_files")
+        if (!cacheDir.exists()) {
+            return 0L
+        }
+
+        return cacheDir.listFiles()
+            ?.filter { it.name.startsWith("${connectionId}_") }
+            ?.sumOf { it.length() } ?: 0L
     }
 }

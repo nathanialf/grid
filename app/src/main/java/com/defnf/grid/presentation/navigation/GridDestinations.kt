@@ -9,5 +9,8 @@ sealed class GridDestinations(val route: String) {
     object FileBrowser : GridDestinations("file_browser/{connectionId}") {
         fun createRoute(connectionId: String) = "file_browser/$connectionId"
     }
+    object CachedFiles : GridDestinations("cached_files/{connectionId}") {
+        fun createRoute(connectionId: String) = "cached_files/$connectionId"
+    }
     object Settings : GridDestinations("settings")
 }

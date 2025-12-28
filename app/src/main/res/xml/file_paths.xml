@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Cache directory for opened files -->
+    <cache-path
+        name="opened_files"
+        path="opened_files/" />
+</paths>

@@ -15,7 +15,7 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = generateVersionCode()
-        versionName = "1.1.0"
+        versionName = "1.1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -44,6 +44,7 @@ android {
     
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     
     composeOptions {
@@ -159,7 +160,7 @@ ksp {
 
 
 fun generateVersionCode(): Int {
-    val versionName = "1.1.0"
+    val versionName = "1.1.1"
     val parts = versionName.split(".")
     val major = parts[0].toInt()
     val minor = parts[1].toInt()

@@ -35,6 +35,7 @@ fun ConnectionListScreen(
     onNavigateToAddConnection: () -> Unit,
     onNavigateToEditConnection: (String) -> Unit,
     onNavigateToFileBrowser: (String) -> Unit,
+    onNavigateToCachedFiles: (String) -> Unit,
     onNavigateToSettings: () -> Unit,
     viewModel: ConnectionListViewModel = hiltViewModel()
 ) {
@@ -220,12 +221,13 @@ fun ConnectionListScreen(
                             connection = connection,
                             onConnect = { onNavigateToFileBrowser(connection.id) },
                             onEdit = { onNavigateToEditConnection(connection.id) },
+                            onViewCachedFiles = { onNavigateToCachedFiles(connection.id) },
                             onDelete = { viewModel.deleteConnection(connection.id) },
-                            onMoveUp = if (index > 0) { 
-                                { viewModel.reorderConnections(index, index - 1) } 
+                            onMoveUp = if (index > 0) {
+                                { viewModel.reorderConnections(index, index - 1) }
                             } else null,
-                            onMoveDown = if (index < uiState.connections.size - 1) { 
-                                { viewModel.reorderConnections(index, index + 1) } 
+                            onMoveDown = if (index < uiState.connections.size - 1) {
+                                { viewModel.reorderConnections(index, index + 1) }
                             } else null
                         )
                     }
@@ -317,6 +319,7 @@ private fun ConnectionCard(
     connection: Connection,
     onConnect: () -> Unit,
     onEdit: () -> Unit,
+    onViewCachedFiles: () -> Unit,
     onDelete: () -> Unit,
     onMoveUp: (() -> Unit)? = null,
     onMoveDown: (() -> Unit)? = null
@@ -357,11 +360,21 @@ private fun ConnectionCard(
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
                         )
-                        Text(
-                            text = "${connection.hostname}:${connection.effectivePort}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = connection.protocol.name,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "${connection.hostname}:${connection.effectivePort}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
                 
@@ -387,7 +400,7 @@ private fun ConnectionCard(
                                 Icon(Icons.Default.Edit, contentDescription = null)
                             }
                         )
-                        
+
                         onMoveUp?.let { moveUp ->
                             DropdownMenuItem(
                                 text = { Text("Move Up") },
@@ -428,22 +441,19 @@ private fun ConnectionCard(
                 }
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedButton(
+                onClick = onViewCachedFiles,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                AssistChip(
-                    onClick = { },
-                    label = { Text(connection.protocol.name) }
+                Icon(
+                    imageVector = Icons.Default.OfflinePin,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
                 )
-                
-                connection.lastConnectedAt?.let {
-                    AssistChip(
-                        onClick = { },
-                        label = { Text("Last used") }
-                    )
-                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Offline Files")
             }
         }
     }
@@ -544,6 +554,7 @@ private fun ConnectionListScreenPreview() {
             onNavigateToAddConnection = {},
             onNavigateToEditConnection = {},
             onNavigateToFileBrowser = {},
+            onNavigateToCachedFiles = {},
             onNavigateToSettings = {}
         )
     }
@@ -557,6 +568,7 @@ private fun EmptyConnectionListPreview() {
             onNavigateToAddConnection = {},
             onNavigateToEditConnection = {},
             onNavigateToFileBrowser = {},
+            onNavigateToCachedFiles = {},
             onNavigateToSettings = {}
         )
     }

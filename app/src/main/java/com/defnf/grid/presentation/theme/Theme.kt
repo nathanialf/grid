@@ -46,10 +46,13 @@ fun GridTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val activity = view.context as? Activity
-            activity?.let { 
+            activity?.let {
                 val window = it.window
-                WindowCompat.setDecorFitsSystemWindows(window, false)
-                WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+                // enableEdgeToEdge() handles edge-to-edge setup, we just need to set system bar appearance
+                WindowCompat.getInsetsController(window, view).apply {
+                    isAppearanceLightStatusBars = !darkTheme
+                    isAppearanceLightNavigationBars = !darkTheme
+                }
             }
         }
     }

@@ -3,6 +3,7 @@ package com.defnf.grid.presentation.fileviewer
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -23,7 +24,8 @@ class FileViewerActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+        enableEdgeToEdge()
+
         val filePath = intent.getStringExtra("file_path") ?: return finish()
         val fileName = intent.getStringExtra("file_name") ?: "Unknown File"
         val fileType = intent.getStringExtra("file_type") ?: "UNKNOWN"

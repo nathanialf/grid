@@ -84,7 +84,7 @@ class ArchiveReader {
     private fun read7ZipArchive(file: File): List<ArchiveEntry> {
         val entries = mutableListOf<ArchiveEntry>()
         
-        SevenZFile(file).use { sevenZFile ->
+        SevenZFile.builder().setFile(file).get().use { sevenZFile ->
             var entry = sevenZFile.nextEntry
             while (entry != null) {
                 if (!entry.name.startsWith("__MACOSX/") && !entry.name.startsWith(".DS_Store")) {

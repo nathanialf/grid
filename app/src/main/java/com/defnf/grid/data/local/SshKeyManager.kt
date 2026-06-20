@@ -2,6 +2,7 @@ package com.defnf.grid.data.local
 
 import android.content.Context
 import android.util.Base64
+import androidx.core.content.edit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.StringWriter
 import java.security.KeyPair
@@ -33,11 +34,11 @@ class SshKeyManager @Inject constructor(
         // Store the private key encrypted
         val privateKeyPem = privateKeyToPem(keyPair)
         val encryptedPrivateKey = encryptionManager.encrypt(privateKeyPem)
-        prefs.edit().putString("private_key_$keyName", encryptedPrivateKey).apply()
+        prefs.edit { putString("private_key_$keyName", encryptedPrivateKey) }
 
         // Generate and store the public key in OpenSSH format
         val publicKeyOpenSsh = publicKeyToOpenSsh(keyPair.public as RSAPublicKey, keyName)
-        prefs.edit().putString("public_key_$keyName", publicKeyOpenSsh).apply()
+        prefs.edit { putString("public_key_$keyName", publicKeyOpenSsh) }
 
         println("SshKeyManager: Generated $keySize-bit RSA keypair for '$keyName'")
         return publicKeyOpenSsh
@@ -74,10 +75,10 @@ class SshKeyManager @Inject constructor(
      * Delete a keypair
      */
     fun deleteKeyPair(keyName: String) {
-        prefs.edit()
-            .remove("private_key_$keyName")
-            .remove("public_key_$keyName")
-            .apply()
+        prefs.edit {
+            remove("private_key_$keyName")
+            remove("public_key_$keyName")
+        }
         println("SshKeyManager: Deleted keypair '$keyName'")
     }
 

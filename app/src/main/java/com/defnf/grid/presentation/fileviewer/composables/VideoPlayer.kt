@@ -18,8 +18,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -31,13 +33,14 @@ import com.defnf.grid.presentation.fileviewer.utils.formatTime
 import kotlinx.coroutines.delay
 import java.io.File
 
+@OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayer(
     file: File,
+    modifier: Modifier = Modifier,
     fileName: String? = null,
     connectionId: String? = null,
-    remotePath: String? = null,
-    modifier: Modifier = Modifier
+    remotePath: String? = null
 ) {
     val context = LocalContext.current
     var mediaController by remember { mutableStateOf<MediaController?>(null) }

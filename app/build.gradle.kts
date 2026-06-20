@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +8,21 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
+
+// Release signing credentials are loaded from keystore.properties at the repo root.
+// That file (and the keystore itself) are intentionally NOT checked into version control.
+// Until keystore.properties exists, release builds are produced UNSIGNED so the build
+// still works; once you drop the file in, release builds are signed automatically.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties()
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+
+// Single source of truth for the app version. versionName feeds BuildConfig.VERSION_NAME
+// (shown in Settings) and versionCode is derived from it below. Bump this one value.
+val appVersionName = "1.1.2"
 
 android {
     namespace = "com.defnf.grid"
@@ -15,11 +33,22 @@ android {
         minSdk = 24
         targetSdk = 35
         versionCode = generateVersionCode()
-        versionName = "1.1.1"
+        versionName = appVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
         }
     }
 
@@ -30,16 +59,47 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        // Backport java.time / java.nio.file APIs so they work on minSdk 24 (API 26 features).
+        isCoreLibraryDesugaringEnabled = true
     }
-    
+
+    lint {
+        // Zero tolerance: every lint warning is promoted to an error and fails the build,
+        // on both debug and release. Combined with kotlinOptions.allWarningsAsErrors, nothing
+        // warning-level can slip through.
+        warningsAsErrors = true
+        abortOnError = true
+        checkReleaseBuilds = true
+
+        // --- Deliberately excluded checks (NOT correctness/quality issues) ---
+        // TrustAllX509TrustManager fires inside the Apache MINA jar (third-party, not our
+        // source). The app talks SSH (sshd-sftp) and SMB, not that library's TLS path, so it
+        // is a non-applicable false positive we cannot fix in dependency bytecode.
+        disable += "TrustAllX509TrustManager"
+        // The following are informational "a newer version is available" advisories. They are
+        // not defects, they re-fire every time any dependency publishes a release, and clearing
+        // them requires major-version migrations (AGP 9, Kotlin 2.x, compileSdk 36) that can't
+        // be runtime-verified in CI. Dependencies are reviewed/bumped out-of-band instead, so
+        // these are excluded from the zero-tolerance gate to keep it stable and meaningful.
+        disable += "NewerVersionAvailable"
+        disable += "GradleDependency"
+        disable += "AndroidGradlePluginVersion"
+        disable += "OldTargetApi"
+    }
+
     kotlinOptions {
         jvmTarget = "11"
+        // Zero tolerance for warnings: any Kotlin compiler warning fails the build.
+        allWarningsAsErrors = true
     }
     
     buildFeatures {
@@ -85,7 +145,7 @@ dependencies {
     
     // Additional Compose dependencies
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation("androidx.palette:palette-ktx:1.0.0") // For album art color extraction
+    implementation(libs.androidx.palette.ktx) // For album art color extraction
     
     // Dependency Injection
     implementation(libs.hilt.android)
@@ -109,10 +169,10 @@ dependencies {
     implementation(libs.coil.svg)
     
     // Markdown Rendering
-    implementation("io.noties.markwon:core:4.6.2") {
+    implementation(libs.markwon.core) {
         exclude(group = "org.jetbrains", module = "annotations-java5")
     }
-    implementation("io.noties.markwon:html:4.6.2") {
+    implementation(libs.markwon.html) {
         exclude(group = "org.jetbrains", module = "annotations-java5")
     }
     
@@ -128,13 +188,16 @@ dependencies {
     implementation(libs.mina.sshd.client)
     
     // Archive Handling
-    implementation("org.apache.commons:commons-compress:1.24.0")
-    implementation("com.github.junrar:junrar:7.5.5")
-    implementation("org.tukaani:xz:1.9")
-    
+    implementation(libs.commons.compress)
+    implementation(libs.junrar)
+    implementation(libs.xz)
+
     // EPUB Handling
-    implementation("org.jsoup:jsoup:1.17.2") // For HTML parsing in EPUB and ZIP handling
-    implementation("androidx.compose.foundation:foundation:1.7.6") // For HorizontalPager
+    implementation(libs.jsoup) // For HTML parsing in EPUB and ZIP handling
+    implementation(libs.androidx.compose.foundation) // For HorizontalPager (version from Compose BOM)
+
+    // Core library desugaring (java.time / java.nio.file backport for minSdk 24)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     
     // Testing
     testImplementation(libs.junit)
@@ -155,13 +218,11 @@ dependencies {
 ksp {
     arg("dagger.formatGeneratedSource", "disabled")
     arg("dagger.fastInit", "enabled")
-    arg("ksp.incremental", "false")
 }
 
 
 fun generateVersionCode(): Int {
-    val versionName = "1.1.1"
-    val parts = versionName.split(".")
+    val parts = appVersionName.split(".")
     val major = parts[0].toInt()
     val minor = parts[1].toInt()
     val patch = parts[2].toInt()

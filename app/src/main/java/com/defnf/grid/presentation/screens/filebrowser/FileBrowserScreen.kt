@@ -21,11 +21,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.automirrored.filled.TextSnippet
-import androidx.compose.material.icons.automirrored.filled.MenuBook
+import com.defnf.grid.presentation.components.FileThumbnail
+import com.defnf.grid.presentation.util.FileType
+import com.defnf.grid.presentation.util.getFileType
+import java.io.File
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -457,6 +457,7 @@ fun FileBrowserScreen(
                         ) { file ->
                             FileGridItem(
                                 file = file,
+                                thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
                                 onClick = {
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
@@ -517,6 +518,7 @@ fun FileBrowserScreen(
                         ) { file ->
                             FileItem(
                                 file = file,
+                                thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
                                 onClick = {
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
@@ -835,7 +837,8 @@ private fun FileItem(
     onSelectionToggle: () -> Unit = {},
     onLongPress: () -> Unit = {},
     isDownloading: Boolean = false,
-    downloadProgress: Float = 0f
+    downloadProgress: Float = 0f,
+    thumbnailFile: File? = null
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
     val hapticFeedback = LocalHapticFeedback.current
@@ -898,10 +901,13 @@ private fun FileItem(
                     strokeWidth = 4f
                 )
             } else {
-                Icon(
-                    imageVector = if (file.isDirectory) Icons.Default.Folder else getFileIcon(file.name),
-                    contentDescription = if (file.isDirectory) "Directory" else "File",
-                    tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                FileThumbnail(
+                    fileName = file.name,
+                    isDirectory = file.isDirectory,
+                    localFile = thumbnailFile,
+                    size = 40.dp,
+                    folderTint = MaterialTheme.colorScheme.primary,
+                    fileTint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
@@ -965,95 +971,24 @@ private fun formatFileSize(bytes: Long): String {
     return "%.1f %s".format(size, units[unitIndex])
 }
 
-private enum class FileType {
-    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, ARCHIVE, EBOOK, UNKNOWN
-}
-
-private fun getFileType(fileName: String): FileType {
-    val extension = fileName.substringAfterLast('.', "").lowercase()
-    
-    return when {
-        // Image extensions (including animated GIFs)
-        extension in setOf("jpg", "jpeg", "png", "bmp", "webp", "svg", "gif") -> FileType.IMAGE
-        
-        // PDF extensions
-        extension == "pdf" -> FileType.PDF
-        
-        // Audio extensions
-        extension in setOf("mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus") -> FileType.AUDIO
-        
-        // Video extensions
-        extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> FileType.VIDEO
-        
-        // Archive extensions
-        extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> FileType.ARCHIVE
-        
-        // Ebook extensions
-        extension in setOf("epub", "mobi", "azw", "azw3", "fb2", "lit") -> FileType.EBOOK
-        
-        // Markdown extensions
-        extension in setOf("md", "markdown") -> FileType.MARKDOWN
-        
-        // Code extensions (for syntax highlighting)
-        extension in setOf(
-            "js", "ts", "jsx", "tsx", "java", "kt", "py", "cpp", "c", "h", "cs", "php", 
-            "rb", "go", "rs", "swift", "css", "scss", "sass", "html", "htm", "xml", 
-            "json", "yaml", "yml", "sql", "sh", "bat", "ps1", "dockerfile", "gradle",
-            "groovy", "scala", "clj", "elm", "dart", "vue", "svelte"
-        ) -> FileType.CODE
-        
-        // Text extensions (plain text)
-        extension in setOf(
-            "txt", "properties", "ini", "cfg", "conf", "log", "csv", "toml",
-            "gitignore", "makefile", "readme", "license", "changelog"
-        ) -> FileType.TEXT
-        
-        // Files without extension or unknown extensions - assume text
-        extension.isEmpty() || extension == fileName.lowercase() -> FileType.TEXT
-        
-        else -> FileType.TEXT // Default to text for unknown extensions
-    }
-}
-
-private fun getFileIcon(fileName: String): ImageVector {
-    val extension = fileName.substringAfterLast('.', "").lowercase()
-    
-    return when {
-        // PDF files
-        extension == "pdf" -> Icons.Default.PictureAsPdf
-        
-        // Images
-        extension in setOf("jpg", "jpeg", "png", "bmp", "webp", "svg", "gif") -> Icons.Default.Image
-        
-        // Audio files
-        extension in setOf("mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus") -> Icons.Default.AudioFile
-        
-        // Video files
-        extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> Icons.Filled.PlayArrow
-        
-        // Archive files
-        extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> Icons.Default.Archive
-        
-        // Ebook files
-        extension in setOf("epub", "mobi", "azw", "azw3", "fb2", "lit") -> Icons.AutoMirrored.Filled.MenuBook
-        
-        // Markdown files
-        extension in setOf("md", "markdown") -> Icons.Default.Description
-        
-        // Code files
-        extension in setOf("json", "xml", "html", "htm", "css", "js", "ts", "java", "kt", "py", 
-            "cpp", "c", "h", "cs", "php", "rb", "go", "rs", "swift", "yml", "yaml", "toml",
-            "properties", "sql", "sh", "bat", "dockerfile", "gitignore", "gradle", "makefile") -> Icons.Default.Code
-        
-        // Plain text files
-        extension in setOf("txt", "ini", "cfg", "conf", "log", "csv", "readme") -> Icons.AutoMirrored.Filled.TextSnippet
-        
-        // Files without extension
-        extension.isEmpty() -> Icons.AutoMirrored.Filled.TextSnippet
-        
-        // Default file icon for unsupported types
-        else -> Icons.AutoMirrored.Filled.InsertDriveFile
-    }
+/**
+ * Returns the local cache File for a remote image/audio file if it has already been downloaded
+ * (so a thumbnail can be shown), else null. Mirrors the cache naming used when files are opened
+ * in [FileBrowserViewModel] (`{connectionId}_{encodedPath}_{name}` under cacheDir/opened_files).
+ * Only images and audio qualify; everything else keeps its icon.
+ */
+private fun cachedThumbnailFile(
+    context: android.content.Context,
+    connectionId: String,
+    file: RemoteFile
+): File? {
+    if (file.isDirectory) return null
+    val type = getFileType(file.name)
+    if (type != FileType.IMAGE && type != FileType.AUDIO) return null
+    val cacheDir = File(context.cacheDir, "opened_files")
+    val cacheFileName = "${connectionId}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
+    val cached = File(cacheDir, cacheFileName)
+    return if (cached.exists()) cached else null
 }
 
 private fun handleFileOpen(
@@ -1137,7 +1072,8 @@ private fun FileGridItem(
     onSelectionToggle: () -> Unit = {},
     onLongPress: () -> Unit = {},
     isDownloading: Boolean = false,
-    downloadProgress: Float = 0f
+    downloadProgress: Float = 0f,
+    thumbnailFile: File? = null
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     Card(
@@ -1189,11 +1125,13 @@ private fun FileGridItem(
                         strokeWidth = 5f
                     )
                 } else {
-                    Icon(
-                        imageVector = if (file.isDirectory) Icons.Default.Folder else getFileIcon(file.name),
-                        contentDescription = if (file.isDirectory) "Directory" else "File",
-                        modifier = Modifier.size(if (file.isDirectory) 40.dp else 32.dp),
-                        tint = if (file.isDirectory) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    FileThumbnail(
+                        fileName = file.name,
+                        isDirectory = file.isDirectory,
+                        localFile = thumbnailFile,
+                        size = if (file.isDirectory) 40.dp else 48.dp,
+                        folderTint = MaterialTheme.colorScheme.primary,
+                        fileTint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 

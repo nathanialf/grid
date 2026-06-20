@@ -7,6 +7,9 @@ gradlew.bat
 # Local configuration file (sdk path, etc)
 local.properties
 
+# Release signing credentials (passwords + keystore path) — never commit
+keystore.properties
+
 # Android Studio
 .idea/
 *.iml

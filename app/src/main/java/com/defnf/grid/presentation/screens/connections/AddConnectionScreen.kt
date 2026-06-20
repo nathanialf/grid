@@ -171,6 +171,7 @@ fun EditConnectionScreen(
 private fun ConnectionForm(
     formData: ConnectionFormData,
     onFormDataChange: (ConnectionFormData) -> Unit,
+    modifier: Modifier = Modifier,
     onTestConnection: () -> Unit = {},
     isTestingConnection: Boolean = false,
     testResult: String? = null,
@@ -182,8 +183,7 @@ private fun ConnectionForm(
     isGeneratingKey: Boolean = false,
     onGenerateKey: () -> Unit = {},
     onUseGeneratedKey: () -> Unit = {},
-    onClearKey: () -> Unit = {},
-    modifier: Modifier = Modifier
+    onClearKey: () -> Unit = {}
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     

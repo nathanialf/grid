@@ -1,6 +1,7 @@
 [versions]
 agp = "8.13.0"
 kotlin = "1.9.25"
+desugarJdkLibs = "2.1.5"
 ksp = "1.9.25-1.0.20"
 composeCompiler = "1.5.15"
 coreKtx = "1.15.0"
@@ -8,7 +9,7 @@ lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.10.0"
 composeBom = "2024.12.01"
 composeNavigation = "2.8.4"
-hilt = "2.53"
+hilt = "2.54"
 hiltNavigation = "1.2.0"
 datastore = "1.1.1"
 biometric = "1.1.0"
@@ -16,13 +17,15 @@ kotlinxSerialization = "1.6.3"
 workManager = "2.10.0"
 coil = "2.7.0"
 media3 = "1.4.1"
-smbj = "0.13.0"
-mina = "2.2.3"
+smbj = "0.14.0"
+mina = "2.2.9"
+markwon = "4.6.2"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 
 [libraries]
+desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs_nio", version.ref = "desugarJdkLibs" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycleRuntimeKtx" }
@@ -76,8 +79,20 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.8.1" }
-mockk = { group = "io.mockk", name = "mockk", version = "1.13.13" }
-turbine = { group = "app.cash.turbine", name = "turbine", version = "1.2.0" }
+mockk = { group = "io.mockk", name = "mockk", version = "1.14.11" }
+turbine = { group = "app.cash.turbine", name = "turbine", version = "1.2.1" }
+
+# UI extras
+androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version = "1.0.0" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation" }
+
+# Markdown / EPUB / Archives (pure-JVM)
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+markwon-html = { group = "io.noties.markwon", name = "html", version.ref = "markwon" }
+commons-compress = { group = "org.apache.commons", name = "commons-compress", version = "1.28.0" }
+junrar = { group = "com.github.junrar", name = "junrar", version = "7.6.0" }
+xz = { group = "org.tukaani", name = "xz", version = "1.12" }
+jsoup = { group = "org.jsoup", name = "jsoup", version = "1.22.2" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

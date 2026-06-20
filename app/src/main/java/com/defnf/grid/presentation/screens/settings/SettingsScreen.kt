@@ -22,7 +22,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.presentation.theme.GridTheme
 import android.content.Intent
-import android.net.Uri
+import androidx.core.net.toUri
 import com.defnf.grid.BuildConfig
 
 @Composable
@@ -120,7 +120,7 @@ fun SettingsScreen(
                     subtitle = "defnf.com",
                     icon = Icons.Default.Person,
                     onClick = { 
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://defnf.com"))
+                        val intent = Intent(Intent.ACTION_VIEW, "https://defnf.com".toUri())
                         context.startActivity(intent)
                     }
                 )

@@ -202,9 +202,11 @@ fun EbookPagerContent(
         }
     }
     
-    LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage != currentChapterIndex) {
-            onChapterChanged(pagerState.currentPage)
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect { page ->
+            if (page != currentChapterIndex) {
+                onChapterChanged(page)
+            }
         }
     }
     
@@ -263,13 +265,16 @@ fun ChapterContent(
     }
     
     // Save scroll position
-    LaunchedEffect(lazyListState.firstVisibleItemIndex, lazyListState.firstVisibleItemScrollOffset) {
-        val offset = if (lazyListState.firstVisibleItemIndex == 0) {
-            lazyListState.firstVisibleItemScrollOffset.toFloat()
-        } else {
-            lazyListState.firstVisibleItemIndex * 1000f + lazyListState.firstVisibleItemScrollOffset
-        }
-        onScrollPositionChanged(offset)
+    LaunchedEffect(lazyListState) {
+        snapshotFlow { lazyListState.firstVisibleItemIndex to lazyListState.firstVisibleItemScrollOffset }
+            .collect { (index, scrollOffset) ->
+                val offset = if (index == 0) {
+                    scrollOffset.toFloat()
+                } else {
+                    index * 1000f + scrollOffset
+                }
+                onScrollPositionChanged(offset)
+            }
     }
     
     // Log text parts for debugging

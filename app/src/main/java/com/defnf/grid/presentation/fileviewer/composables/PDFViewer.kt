@@ -3,6 +3,7 @@ package com.defnf.grid.presentation.fileviewer.composables
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import androidx.core.graphics.createBitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.gestures.rememberTransformableState
@@ -87,11 +88,7 @@ fun PDFViewer(
                     val width = (page.width * scaleFactor).toInt()
                     val height = (page.height * scaleFactor).toInt()
                     
-                    val bitmap = Bitmap.createBitmap(
-                        width,
-                        height,
-                        Bitmap.Config.ARGB_8888
-                    )
+                    val bitmap = createBitmap(width, height)
                     
                     // Set bitmap density for better text rendering
                     bitmap.density = android.util.DisplayMetrics.DENSITY_XHIGH

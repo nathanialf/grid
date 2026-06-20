@@ -5,8 +5,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
+import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
@@ -17,6 +19,7 @@ import com.defnf.grid.R
 import com.defnf.grid.presentation.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 
+@OptIn(UnstableApi::class)
 @AndroidEntryPoint
 class AudioPlayerService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
@@ -38,7 +41,7 @@ class AudioPlayerService : MediaSessionService() {
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
                     .setUsage(C.USAGE_MEDIA)
                     .build(),
-                true
+                false // Don't gate playback on audio focus, so media plays during phone calls
             )
             .setHandleAudioBecomingNoisy(true)
             .build()

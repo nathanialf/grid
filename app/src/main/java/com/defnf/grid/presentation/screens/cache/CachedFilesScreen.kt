@@ -11,7 +11,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,7 +22,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.domain.model.CachedFile
+import com.defnf.grid.presentation.components.FileThumbnail
 import com.defnf.grid.presentation.components.WavyCircularProgressIndicator
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -280,11 +281,13 @@ private fun CachedFileItem(
                 modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = getFileIcon(cachedFile.extension),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(40.dp)
+                FileThumbnail(
+                    fileName = cachedFile.name,
+                    isDirectory = false,
+                    localFile = File(cachedFile.path),
+                    size = 40.dp,
+                    folderTint = MaterialTheme.colorScheme.primary,
+                    fileTint = MaterialTheme.colorScheme.primary
                 )
 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -354,21 +357,6 @@ private fun CachedFileItem(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun getFileIcon(extension: String): androidx.compose.ui.graphics.vector.ImageVector {
-    return when (extension.lowercase()) {
-        "pdf" -> Icons.Default.PictureAsPdf
-        "jpg", "jpeg", "png", "gif", "bmp", "webp" -> Icons.Default.Image
-        "mp3", "wav", "flac", "aac", "ogg", "m4a" -> Icons.Default.AudioFile
-        "mp4", "mkv", "avi", "mov", "webm" -> Icons.Default.VideoFile
-        "doc", "docx", "txt", "rtf" -> Icons.Default.Description
-        "xls", "xlsx", "csv" -> Icons.Default.TableChart
-        "zip", "rar", "7z", "tar", "gz" -> Icons.Default.FolderZip
-        "apk" -> Icons.Default.Android
-        else -> Icons.AutoMirrored.Filled.InsertDriveFile
     }
 }
 

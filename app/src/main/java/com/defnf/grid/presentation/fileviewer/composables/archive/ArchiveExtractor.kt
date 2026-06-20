@@ -181,7 +181,7 @@ class ArchiveExtractor {
         archiveFile: File,
         outputDirectory: File
     ): Flow<ExtractionProgress> = flow {
-        SevenZFile(archiveFile).use { sevenZFile ->
+        SevenZFile.builder().setFile(archiveFile).get().use { sevenZFile ->
             // Count entries
             val entries = mutableListOf<org.apache.commons.compress.archivers.sevenz.SevenZArchiveEntry>()
             var entry = sevenZFile.nextEntry
@@ -197,7 +197,7 @@ class ArchiveExtractor {
             
             // Reset and extract
             sevenZFile.close()
-            SevenZFile(archiveFile).use { extractSevenZFile ->
+            SevenZFile.builder().setFile(archiveFile).get().use { extractSevenZFile ->
                 var filesProcessed = 0
                 var bytesProcessed = 0L
                 

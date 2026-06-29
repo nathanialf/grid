@@ -2,6 +2,7 @@ package com.defnf.grid.presentation.screens.filebrowser
 
 import android.app.Application
 import android.net.Uri
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.io.File
@@ -44,11 +45,17 @@ class FileBrowserViewModel @Inject constructor(
     private val renameFileUseCase: RenameFileUseCase,
     private val renameDirUseCase: RenameDirUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
-    private val fileRepository: FileRepository
+    private val fileRepository: FileRepository,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileBrowserUiState())
     val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
+
+    private companion object {
+        /** SavedStateHandle key for the browsed path, so it survives activity/process recreation. */
+        const val KEY_CURRENT_PATH = "file_browser_current_path"
+    }
 
     private var currentConnection: Connection? = null
     private val downloadJobs = mutableMapOf<String, Job>()
@@ -67,13 +74,20 @@ class FileBrowserViewModel @Inject constructor(
                 // Load settings to get view mode
                 val settings = getSettingsUseCase().first()
                 
-                // Determine the starting path based on connection configuration or protocol
-                val startingPath = initialPath ?: when (connection.protocol.name) {
-                    "SMB" -> ""
-                    "FTP", "SFTP" -> connection.startingDirectory?.takeIf { it.isNotBlank() } ?: "/"
-                    else -> "/"
-                }
-                
+                // Determine the starting path. Prefer an explicit initialPath, then any path
+                // restored from SavedStateHandle (survives MainActivity recreation / process
+                // death while the file viewer is in front), and only fall back to the connection
+                // default on a genuinely fresh open. Without this, returning from the viewer after
+                // the OS reclaimed MainActivity would reset the browser to the connection root.
+                val startingPath = initialPath
+                    ?: savedStateHandle.get<String>(KEY_CURRENT_PATH)
+                    ?: when (connection.protocol.name) {
+                        "SMB" -> ""
+                        "FTP", "SFTP" -> connection.startingDirectory?.takeIf { it.isNotBlank() } ?: "/"
+                        else -> "/"
+                    }
+                savedStateHandle[KEY_CURRENT_PATH] = startingPath
+
                 _uiState.value = _uiState.value.copy(
                     connectionId = connectionId,
                     connectionName = connection.name,
@@ -96,6 +110,7 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     fun navigateToDirectory(path: String) {
+        savedStateHandle[KEY_CURRENT_PATH] = path
         _uiState.value = _uiState.value.copy(currentPath = path)
         loadFiles(path)
     }

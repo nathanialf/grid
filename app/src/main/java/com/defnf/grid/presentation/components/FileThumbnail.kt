@@ -14,15 +14,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
 import com.defnf.grid.data.image.AudioArtRequest
+import com.defnf.grid.data.image.VideoFrameRequest
 import com.defnf.grid.presentation.util.FileType
 import com.defnf.grid.presentation.util.getFileIcon
 import com.defnf.grid.presentation.util.getFileType
 import java.io.File
 
 /**
- * Leading visual for a file row. When a local copy of an image or audio file is available,
- * it renders a real thumbnail (the picture, or the track's embedded album art); otherwise it
- * falls back to the file-type icon. Folders and non-thumbnailable types always show an icon.
+ * Leading visual for a file row. When a local copy of an image, audio, or video file is
+ * available, it renders a real thumbnail (the picture, the track's embedded album art, or the
+ * video's first frame); otherwise it falls back to the file-type icon. Folders and
+ * non-thumbnailable types always show an icon.
  *
  * @param localFile the on-disk file to render a thumbnail from, or null if none is available
  *                  (uncached remote file). Callers pass null for files that should keep an icon.
@@ -44,6 +46,7 @@ fun FileThumbnail(
         when (getFileType(fileName)) {
             FileType.IMAGE -> localFile
             FileType.AUDIO -> AudioArtRequest(localFile)
+            FileType.VIDEO -> VideoFrameRequest(localFile)
             else -> null
         }
     } else {

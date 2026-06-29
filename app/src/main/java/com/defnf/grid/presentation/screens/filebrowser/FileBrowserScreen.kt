@@ -972,10 +972,10 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 /**
- * Returns the local cache File for a remote image/audio file if it has already been downloaded
- * (so a thumbnail can be shown), else null. Mirrors the cache naming used when files are opened
- * in [FileBrowserViewModel] (`{connectionId}_{encodedPath}_{name}` under cacheDir/opened_files).
- * Only images and audio qualify; everything else keeps its icon.
+ * Returns the local cache File for a remote image/audio/video file if it has already been
+ * downloaded (so a thumbnail can be shown), else null. Mirrors the cache naming used when files
+ * are opened in [FileBrowserViewModel] (`{connectionId}_{encodedPath}_{name}` under
+ * cacheDir/opened_files). Only images, audio, and video qualify; everything else keeps its icon.
  */
 private fun cachedThumbnailFile(
     context: android.content.Context,
@@ -984,7 +984,7 @@ private fun cachedThumbnailFile(
 ): File? {
     if (file.isDirectory) return null
     val type = getFileType(file.name)
-    if (type != FileType.IMAGE && type != FileType.AUDIO) return null
+    if (type != FileType.IMAGE && type != FileType.AUDIO && type != FileType.VIDEO) return null
     val cacheDir = File(context.cacheDir, "opened_files")
     val cacheFileName = "${connectionId}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
     val cached = File(cacheDir, cacheFileName)

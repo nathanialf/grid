@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+#
+# Grid pre-commit hook.
+#
+# When a commit touches the app (anything under app/, or a Gradle build file) it:
+#   1. Increments the patch component of appVersionName in app/build.gradle.kts and
+#      re-stages it, so the release version is never forgotten. Gradle derives
+#      versionCode from versionName (major*10000 + minor*100 + patch).
+#   2. Builds and signs the release AAB for the new version, so a shippable, signed
+#      bundle always exists. A build/lint failure aborts the commit and the version
+#      bump is rolled back (no version is skipped on a failed commit).
+#
+# Commits that don't touch the app (docs, tooling, the hook itself) skip both steps —
+# the bundle would be byte-identical anyway.
+#
+# Bypass everything with:  git commit --no-verify
+#
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+GRADLE_FILE="$REPO_ROOT/app/build.gradle.kts"
+DRIVER="$REPO_ROOT/.claude/skills/run-grid/driver.sh"
+
+# Don't bump while replaying existing commits (merge / rebase / cherry-pick).
+if [ -f "$REPO_ROOT/.git/MERGE_HEAD" ] ||
+   [ -d "$REPO_ROOT/.git/rebase-merge" ] ||
+   [ -d "$REPO_ROOT/.git/rebase-apply" ]; then
+  exit 0
+fi
+
+# Only act when the app itself changed: app/** or any Gradle build/version file.
+if ! git diff --cached --name-only --diff-filter=ACMR |
+     grep -Eq '^app/|(^|/)build\.gradle(\.kts)?$|(^|/)settings\.gradle(\.kts)?$|(^|/)libs\.versions\.toml$'; then
+  exit 0
+fi
+
+# --- read current version -------------------------------------------------
+current="$(grep -E '^val appVersionName = "' "$GRADLE_FILE" |
+           sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')"
+if ! printf '%s' "$current" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+  echo "pre-commit: could not parse appVersionName from $GRADLE_FILE" >&2
+  exit 1
+fi
+
+IFS='.' read -r major minor patch <<<"$current"
+patch=$((patch + 1))
+# versionCode = major*10000 + minor*100 + patch — patch and minor must stay below 100,
+# or two different versionNames would collide on one versionCode. Hard gate.
+if [ "$patch" -gt 99 ]; then
+  echo "pre-commit: patch would exceed 99 (from $current). Bump the minor version manually in $GRADLE_FILE." >&2
+  exit 1
+fi
+next="$major.$minor.$patch"
+
+set_version() {
+  # Rewrite only the version line; -i.bak keeps this portable across GNU/BSD sed.
+  sed -i.bak -E "s/^val appVersionName = \"[0-9]+\.[0-9]+\.[0-9]+\"/val appVersionName = \"$1\"/" "$GRADLE_FILE"
+  rm -f "$GRADLE_FILE.bak"
+}
+
+set_version "$next"
+echo "pre-commit: version $current -> $next"
+
+# --- build + sign the release bundle --------------------------------------
+if [ -f "$REPO_ROOT/keystore.properties" ]; then
+  # Roll the bump back if the build fails, so a fixed retry doesn't skip a version.
+  trap 'set_version "$current"; echo "pre-commit: release build failed — version restored to $current." >&2' ERR
+  echo "pre-commit: building signed release bundle (lint + sign, ~1.5 min)..."
+  "$DRIVER" release
+  trap - ERR
+else
+  echo "pre-commit: keystore.properties missing — staging the version bump but skipping the signed bundle." >&2
+fi
+
+git add "$GRADLE_FILE"

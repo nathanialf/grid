@@ -148,6 +148,25 @@ app/src/main/java/com/grid/app/
 ./gradlew lint
 ```
 
+### Git hooks (version bump + signed bundle)
+A tracked pre-commit hook in `.githooks/` keeps the release version from being forgotten.
+On any commit that touches the app (anything under `app/`, or a Gradle build file) it:
+
+1. Increments the patch of `appVersionName` in `app/build.gradle.kts` and re-stages it
+   (`versionCode` is derived from it), and
+2. Builds and signs the release AAB for the new version. A build/lint failure aborts the
+   commit and rolls the bump back, so no version is skipped.
+
+Commits that don't touch the app (docs, tooling) skip both steps. The signed-bundle step
+needs `keystore.properties` at the repo root; without it the bump still happens and the
+build is skipped.
+
+Activate the hooks once per clone (Git doesn't track `core.hooksPath`):
+```bash
+git config core.hooksPath .githooks
+```
+Bypass for a single commit with `git commit --no-verify`.
+
 ## Configuration
 
 ### Network Permissions

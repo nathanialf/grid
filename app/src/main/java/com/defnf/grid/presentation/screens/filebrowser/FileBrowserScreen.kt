@@ -23,6 +23,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Sort
 import com.defnf.grid.presentation.components.FileThumbnail
+import com.defnf.grid.presentation.components.FileThumbnailFill
+import com.defnf.grid.presentation.components.hasThumbnail
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import com.defnf.grid.presentation.util.FileType
 import com.defnf.grid.presentation.util.getFileType
 import java.io.File
@@ -878,29 +883,46 @@ private fun FileItem(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp)
-                    .padding(16.dp),
+                    .height(72.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
             if (isSelectionMode) {
+                Spacer(modifier = Modifier.width(16.dp))
                 Checkbox(
                     checked = isSelected,
-                    onCheckedChange = { 
+                    onCheckedChange = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSelectionToggle() 
+                        onSelectionToggle()
                     }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
-            
+
+            // A cached thumbnail runs full-height flush to the card's left edge for a richer row;
+            // icons (and selection mode) keep the standard inset.
+            val showEdgeThumbnail = !isDownloading &&
+                hasThumbnail(file.name, file.isDirectory, thumbnailFile)
+
             if (isDownloading && !file.isDirectory) {
+                if (!isSelectionMode) Spacer(modifier = Modifier.width(16.dp))
                 WavyCircularProgressIndicator(
                     progress = downloadProgress,
                     modifier = Modifier.size(24.dp),
                     color = MaterialTheme.colorScheme.primary,
                     strokeWidth = 4f
                 )
+                Spacer(modifier = Modifier.width(16.dp))
+            } else if (showEdgeThumbnail && !isSelectionMode) {
+                FileThumbnailFill(
+                    fileName = file.name,
+                    localFile = thumbnailFile,
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .aspectRatio(1f)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
             } else {
+                if (!isSelectionMode) Spacer(modifier = Modifier.width(16.dp))
                 FileThumbnail(
                     fileName = file.name,
                     isDirectory = file.isDirectory,
@@ -909,10 +931,9 @@ private fun FileItem(
                     folderTint = MaterialTheme.colorScheme.primary,
                     fileTint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.width(16.dp))
             }
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
+
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -953,6 +974,8 @@ private fun FileItem(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+
+            Spacer(modifier = Modifier.width(16.dp))
             }
         }
     }
@@ -1110,6 +1133,46 @@ private fun FileGridItem(
                     )
                 }
         ) {
+            // When a real thumbnail is cached, let it fill the whole card and lay the name over a
+            // gradient scrim so it stays legible against the image.
+            val showFullThumbnail = !isDownloading &&
+                hasThumbnail(file.name, file.isDirectory, thumbnailFile)
+
+            if (showFullThumbnail) {
+                FileThumbnailFill(
+                    fileName = file.name,
+                    localFile = thumbnailFile,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                            )
+                        )
+                        .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp)
+                ) {
+                    Text(
+                        text = file.name,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        color = Color.White
+                    )
+                    if (file.size > 0) {
+                        Text(
+                            text = formatFileSize(file.size),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.85f)
+                        )
+                    }
+                }
+            } else {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -1165,7 +1228,8 @@ private fun FileGridItem(
                     )
                 }
             }
-            
+            }
+
             if (isSelectionMode) {
                 Checkbox(
                     checked = isSelected,

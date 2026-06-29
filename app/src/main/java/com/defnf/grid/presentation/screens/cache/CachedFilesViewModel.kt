@@ -8,11 +8,13 @@ import androidx.lifecycle.viewModelScope
 import com.defnf.grid.domain.model.CachedFile
 import com.defnf.grid.domain.repository.ConnectionRepository
 import com.defnf.grid.domain.repository.FileRepository
+import com.defnf.grid.domain.usecase.settings.GetSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -22,7 +24,8 @@ import javax.inject.Inject
 class CachedFilesViewModel @Inject constructor(
     private val application: Application,
     private val fileRepository: FileRepository,
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val getSettingsUseCase: GetSettingsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CachedFilesUiState())
@@ -37,8 +40,10 @@ class CachedFilesViewModel @Inject constructor(
 
             try {
                 val connection = connectionRepository.getConnectionById(connectionId)
+                val settings = getSettingsUseCase().first()
                 _uiState.value = _uiState.value.copy(
-                    connectionName = connection.name
+                    connectionName = connection.name,
+                    viewMode = settings.defaultViewMode.name.lowercase()
                 )
                 loadCachedFiles(connectionId)
             } catch (e: Exception) {
@@ -217,6 +222,7 @@ class CachedFilesViewModel @Inject constructor(
 data class CachedFilesUiState(
     val connectionId: String = "",
     val connectionName: String = "",
+    val viewMode: String = "list",
     val cachedFiles: List<CachedFile> = emptyList(),
     val totalCacheSize: Long = 0L,
     val isLoading: Boolean = false,

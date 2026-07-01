@@ -40,8 +40,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
-import android.provider.OpenableColumns
-import androidx.activity.compose.rememberLauncherForActivityResult
 import android.app.Activity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,20 +98,13 @@ fun FileBrowserScreen(
         }
     }
     
-    // File picker launcher
+    // File picker launcher (multi-select). Display-name resolution and the upload
+    // itself are handled by the ViewModel.
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri?.let {
-            // Get file name from content resolver
-            val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                cursor.moveToFirst()
-                cursor.getString(nameIndex)
-            } ?: "uploaded_file"
-            
-            // Pass the URI directly to the ViewModel - it will handle the content resolution
-            viewModel.uploadFile(uri, fileName)
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            viewModel.uploadFiles(uris)
         }
     }
     
@@ -577,16 +568,31 @@ fun FileBrowserScreen(
                             )
                             
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Uploading ${uiState.uploadFileName}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Text(
-                                    text = "${(uiState.uploadProgress * 100).toInt()}%",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                if (uiState.uploadTotalCount > 1) {
+                                    Text(
+                                        text = "Uploading ${uiState.uploadCurrentIndex} of ${uiState.uploadTotalCount}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "${uiState.uploadFileName} · ${(uiState.uploadProgress * 100).toInt()}%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                } else {
+                                    Text(
+                                        text = "Uploading ${uiState.uploadFileName}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = "${(uiState.uploadProgress * 100).toInt()}%",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                             
                             IconButton(

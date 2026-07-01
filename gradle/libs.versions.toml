@@ -79,8 +79,10 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.8.1" }
-mockk = { group = "io.mockk", name = "mockk", version = "1.14.11" }
-turbine = { group = "app.cash.turbine", name = "turbine", version = "1.2.1" }
+# Pinned to the last releases built against Kotlin 1.9; newer versions (MockK 1.14.x,
+# Turbine 1.2.x) ship Kotlin 2.x metadata that the project's 1.9.25 KSP compiler can't read.
+mockk = { group = "io.mockk", name = "mockk", version = "1.13.13" }
+turbine = { group = "app.cash.turbine", name = "turbine", version = "1.1.0" }
 
 # UI extras
 androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version = "1.0.0" }

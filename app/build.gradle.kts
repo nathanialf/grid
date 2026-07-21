@@ -22,16 +22,16 @@ if (hasReleaseKeystore) {
 
 // Single source of truth for the app version. versionName feeds BuildConfig.VERSION_NAME
 // (shown in Settings) and versionCode is derived from it below. Bump this one value.
-val appVersionName = "1.1.5"
+val appVersionName = "1.1.6"
 
 android {
     namespace = "com.defnf.grid"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.defnf.grid"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = generateVersionCode()
         versionName = appVersionName
 
@@ -87,7 +87,7 @@ android {
         disable += "TrustAllX509TrustManager"
         // The following are informational "a newer version is available" advisories. They are
         // not defects, they re-fire every time any dependency publishes a release, and clearing
-        // them requires major-version migrations (AGP 9, Kotlin 2.x, compileSdk 36) that can't
+        // them requires major-version migrations (AGP 9, Kotlin 2.x) that can't
         // be runtime-verified in CI. Dependencies are reviewed/bumped out-of-band instead, so
         // these are excluded from the zero-tolerance gate to keep it stable and meaningful.
         disable += "NewerVersionAvailable"

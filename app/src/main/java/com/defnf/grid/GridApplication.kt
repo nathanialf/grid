@@ -11,10 +11,27 @@ import com.defnf.grid.data.image.AudioArtRequest
 import com.defnf.grid.data.image.VideoFrameFetcher
 import com.defnf.grid.data.image.VideoFrameKeyer
 import com.defnf.grid.data.image.VideoFrameRequest
+import androidx.lifecycle.ProcessLifecycleOwner
+import com.defnf.grid.data.remote.pool.PoolLifecycleObserver
+import com.defnf.grid.data.startup.StartupWarmup
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 @HiltAndroidApp
 class GridApplication : Application(), ImageLoaderFactory {
+
+    @Inject
+    lateinit var startupWarmup: StartupWarmup
+
+    @Inject
+    lateinit var poolLifecycleObserver: PoolLifecycleObserver
+
+    override fun onCreate() {
+        // Hilt completes field injection inside the generated super call.
+        super.onCreate()
+        ProcessLifecycleOwner.get().lifecycle.addObserver(poolLifecycleObserver)
+        startupWarmup.start()
+    }
 
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)

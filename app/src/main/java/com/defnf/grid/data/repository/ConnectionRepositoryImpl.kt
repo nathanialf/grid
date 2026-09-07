@@ -3,6 +3,7 @@ package com.defnf.grid.data.repository
 import android.content.Context
 import com.defnf.grid.data.local.PreferencesManager
 import com.defnf.grid.data.provider.GridDocumentsProvider
+import com.defnf.grid.data.remote.pool.ConnectionPool
 import com.defnf.grid.domain.model.Connection
 import com.defnf.grid.domain.model.Result
 import com.defnf.grid.domain.repository.ConnectionRepository
@@ -16,6 +17,7 @@ import javax.inject.Singleton
 @Singleton
 class ConnectionRepositoryImpl @Inject constructor(
     private val preferencesManager: PreferencesManager,
+    private val connectionPool: ConnectionPool,
     @ApplicationContext private val context: Context
 ) : ConnectionRepository {
     
@@ -49,6 +51,7 @@ class ConnectionRepositoryImpl @Inject constructor(
         if (existingIndex >= 0) {
             currentConnections[existingIndex] = connection
             preferencesManager.saveConnections(currentConnections)
+            connectionPool.evict(connection.id)
             GridDocumentsProvider.notifyRootsChanged(context)
         } else {
             throw IllegalArgumentException("Connection not found: ${connection.id}")
@@ -83,6 +86,7 @@ class ConnectionRepositoryImpl @Inject constructor(
             val currentConnections = preferencesManager.getConnections().first().toMutableList()
             currentConnections.removeAll { it.id == id }
             preferencesManager.saveConnections(currentConnections)
+            connectionPool.evict(id)
             GridDocumentsProvider.notifyRootsChanged(context)
             Result.Success(Unit)
         } catch (e: Exception) {

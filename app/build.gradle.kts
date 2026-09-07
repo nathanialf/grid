@@ -22,7 +22,7 @@ if (hasReleaseKeystore) {
 
 // Single source of truth for the app version. versionName feeds BuildConfig.VERSION_NAME
 // (shown in Settings) and versionCode is derived from it below. Bump this one value.
-val appVersionName = "1.1.6"
+val appVersionName = "1.1.7"
 
 android {
     namespace = "com.defnf.grid"
@@ -106,6 +106,15 @@ android {
         compose = true
         buildConfig = true
     }
+
+    testOptions {
+        unitTests {
+            // GridLog delegates to android.util.Log, which throws "not mocked" under plain JVM unit
+            // tests. Returning defaults lets logging be a no-op in tests instead of forcing every
+            // test that touches a logging code path to stub the framework.
+            isReturnDefaultValues = true
+        }
+    }
     
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.15"
@@ -132,6 +141,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
     
     // Compose BOM

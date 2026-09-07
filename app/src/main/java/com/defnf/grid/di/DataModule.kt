@@ -7,11 +7,13 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.defnf.grid.data.local.EncryptionManager
 import com.defnf.grid.data.local.PreferencesManager
 import com.defnf.grid.data.local.BiometricManager
+import com.defnf.grid.data.remote.DefaultNetworkClientFactory
 import com.defnf.grid.data.remote.NetworkClientFactory
-import com.defnf.grid.data.remote.SftpClient
-import com.defnf.grid.data.remote.SmbClient
 import com.defnf.grid.data.repository.ConnectionRepositoryImpl
 import com.defnf.grid.data.repository.CredentialRepositoryImpl
+import com.defnf.grid.data.remote.smb.SmbClientProvider
+import com.defnf.grid.data.remote.ssh.SshClientProvider
+import kotlinx.coroutines.CoroutineScope
 import com.defnf.grid.data.repository.FileRepositoryImpl
 import com.defnf.grid.data.repository.SettingsRepositoryImpl
 import com.defnf.grid.data.local.EbookRepositoryImpl
@@ -64,25 +66,16 @@ object DataModule {
         return PreferencesManager(dataStore, encryptionManager)
     }
     
-    @Provides
-    @Singleton
-    fun provideSftpClient(@ApplicationContext context: android.content.Context): SftpClient {
-        return SftpClient(context)
-    }
-    
-    @Provides
-    @Singleton
-    fun provideSmbClient(): SmbClient {
-        return SmbClient()
-    }
-    
+    // SftpClient / SmbClient are deliberately NOT provided as singletons: each one owns a single
+    // session, and the pool needs a distinct instance per pooled connection. The factory mints them.
     @Provides
     @Singleton
     fun provideNetworkClientFactory(
-        sftpClient: SftpClient,
-        smbClient: SmbClient
+        sshClientProvider: SshClientProvider,
+        smbClientProvider: SmbClientProvider,
+        @ApplicationScope appScope: CoroutineScope
     ): NetworkClientFactory {
-        return NetworkClientFactory(sftpClient, smbClient)
+        return DefaultNetworkClientFactory(sshClientProvider, smbClientProvider, appScope)
     }
 }
 

@@ -1,203 +1,164 @@
 package com.defnf.grid.data.remote
 
-import android.content.Context
+import com.defnf.grid.data.remote.ssh.SshClientProvider
+import com.defnf.grid.data.remote.ssh.SshTuning
+import com.defnf.grid.data.remote.telemetry.ConnectPhase
+import com.defnf.grid.data.remote.telemetry.ConnectTrace
 import com.defnf.grid.domain.model.*
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.defnf.grid.util.GridLog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
-import org.apache.sshd.client.SshClient
-import org.apache.sshd.client.channel.ClientChannelEvent
+import kotlinx.coroutines.withTimeout
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.kex.BuiltinDHFactories
-import org.apache.sshd.common.kex.KeyExchangeFactory
-import org.apache.sshd.common.signature.BuiltinSignatures
-import org.apache.sshd.common.NamedFactory
-import org.apache.sshd.common.signature.Signature
-import org.apache.sshd.client.ClientBuilder
+import org.apache.sshd.common.kex.KexProposalOption
+import org.apache.sshd.common.session.SessionListener
 import org.apache.sshd.common.util.security.SecurityUtils
-import org.apache.sshd.common.util.io.PathUtils
 import org.apache.sshd.sftp.client.SftpClient as ApacheSftpClient
 import org.apache.sshd.sftp.client.SftpClientFactory
-import org.apache.sshd.sftp.common.SftpConstants
-import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
-import java.nio.file.Path
-import java.nio.file.Paths
 import javax.inject.Inject
 
 class SftpClient @Inject constructor(
-    @ApplicationContext private val context: Context
+    private val sshClientProvider: SshClientProvider
 ) : NetworkClient {
-    
-    private var sshClient: SshClient? = null
+
+    @Volatile
     private var session: ClientSession? = null
+
+    @Volatile
     private var sftpClient: ApacheSftpClient? = null
-    
-    init {
-        // Set up Android-compatible user home folder resolver using app's files directory
-        PathUtils.setUserHomeFolderResolver { 
-            Paths.get(context.filesDir.absolutePath)
-        }
-    }
-    
-    override suspend fun connect(connection: Connection, credential: Credential): Result<Unit> = withContext(Dispatchers.IO) {
-        try {
-            // Configure security provider for Android compatibility
-            SecurityUtils.setAPrioriDisabledProvider("BC", true) // Disable BouncyCastle provider
-            
-            val client = SshClient.setUpDefaultClient()
-            
-            // Set up key exchange factories using the proper transformation
-            client.keyExchangeFactories = NamedFactory.setUpTransformedFactories(
-                false,
-                BuiltinDHFactories.VALUES,
-                ClientBuilder.DH2KEX
-            )
 
-            // Configure signature factories - prioritize modern RSA-SHA2 algorithms
-            // Modern OpenSSH servers reject the old ssh-rsa (SHA-1) algorithm
-            val signatureFactories = ArrayList<NamedFactory<Signature>>()
-            // Add RSA-SHA2-512 and RSA-SHA2-256 first (required for modern servers)
-            signatureFactories.add(BuiltinSignatures.rsaSHA512)
-            signatureFactories.add(BuiltinSignatures.rsaSHA256)
-            // Add other algorithms
-            for (sig in BuiltinSignatures.VALUES) {
-                if (sig != BuiltinSignatures.rsaSHA512 && sig != BuiltinSignatures.rsaSHA256) {
-                    signatureFactories.add(sig)
+    override suspend fun connect(connection: Connection, credential: Credential): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val trace = ConnectTrace.forSftp()
+            var openedSession: ClientSession? = null
+            try {
+                withTimeout(SshTuning.OVERALL_CONNECT_TIMEOUT_MS) {
+                    // Already built and started; the expensive setup happened during warm-up.
+                    val client = sshClientProvider.get()
+
+                    val newSession = client
+                        .connect(credential.username, connection.hostname, connection.effectivePort)
+                        .verify(SshTuning.CONNECT_TIMEOUT.toMillis())
+                        .session
+                    openedSession = newSession
+                    trace.mark(ConnectPhase.TCP)
+
+                    // The key exchange completes during auth(), so listen for it to separate the two.
+                    newSession.addSessionListener(object : SessionListener {
+                        override fun sessionEvent(
+                            session: org.apache.sshd.common.session.Session,
+                            event: SessionListener.Event
+                        ) {
+                            if (event == SessionListener.Event.KeyEstablished) {
+                                trace.mark(ConnectPhase.KEX)
+                            }
+                        }
+                    })
+
+                    if (!authenticate(newSession, credential)) {
+                        throw IOException("Authentication failed")
+                    }
+                    trace.mark(ConnectPhase.AUTH)
+
+                    // These are what prove the algorithm ordering actually took effect against this
+                    // particular server, rather than us assuming it did.
+                    trace.note("kex", newSession.getNegotiatedKexParameter(KexProposalOption.ALGORITHMS))
+                    trace.note("hostkey", newSession.getNegotiatedKexParameter(KexProposalOption.SERVERKEYS))
+                    trace.note("cipher", newSession.getNegotiatedKexParameter(KexProposalOption.S2CENC))
+                    trace.note("mac", newSession.getNegotiatedKexParameter(KexProposalOption.S2CMAC))
+                    trace.note("x25519", BuiltinDHFactories.curve25519.isSupported.toString())
+
+                    val sftp = try {
+                        SftpClientFactory.instance().createSftpClient(newSession)
+                    } catch (e: Exception) {
+                        throw IOException(sftpSubsystemMessage(e), e)
+                    }
+                    trace.mark(ConnectPhase.SUBSYSTEM)
+
+                    this@SftpClient.session = newSession
+                    this@SftpClient.sftpClient = sftp
                 }
+
+                trace.finish("ok")
+                Result.Success(Unit)
+            } catch (e: TimeoutCancellationException) {
+                // withTimeout cannot interrupt a blocking verify(), so close explicitly or the
+                // half-open session and its thread leak.
+                runCatching { openedSession?.close(true) }
+                trace.finish("timeout")
+                Result.Error(IOException("Connection timed out", e))
+            } catch (e: Exception) {
+                runCatching { openedSession?.close(true) }
+                trace.finish("error")
+                GridLog.w(GridLog.TAG_SFTP, "Connect failed", e)
+                Result.Error(e)
             }
-            client.signatureFactories = signatureFactories
+        }
 
-            // Configure compatibility settings
-            client.serverKeyVerifier = org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier.INSTANCE
-            
-            client.start()
-            
-            val connectFuture = client.connect(credential.username, connection.hostname, connection.effectivePort)
-            val session = connectFuture.verify(10000).session
-            
-            // Authenticate
-            val authenticated = if (!credential.privateKey.isNullOrEmpty()) {
-                try {
-                    println("SFTP: Starting SSH key authentication for user: ${credential.username}")
-                    val keyPair = loadKeyPair(credential.privateKey)
-                    if (keyPair != null) {
-                        session.addPublicKeyIdentity(keyPair)
-                        println("SFTP: SSH key identity added, attempting auth...")
-                        val authResult = session.auth()
-                        println("SFTP: Auth future created, verifying...")
-                        val isSuccess = authResult.verify(15000).isSuccess
-                        println("SFTP: SSH key auth result: $isSuccess")
-                        isSuccess
-                    } else {
-                        println("SFTP: Failed to parse SSH key, falling back to password")
-                        if (credential.password.isNotEmpty()) {
-                            session.addPasswordIdentity(credential.password)
-                            val authResult = session.auth()
-                            authResult.verify(15000).isSuccess
-                        } else {
-                            false
-                        }
-                    }
+    /** Tries key auth when a key is present, falling back to password on any failure. */
+    private fun authenticate(session: ClientSession, credential: Credential): Boolean {
+        val authTimeoutMs = SshTuning.AUTH_TIMEOUT.toMillis()
+
+        if (!credential.privateKey.isNullOrEmpty()) {
+            val keyPair = loadKeyPair(credential.privateKey)
+            if (keyPair != null) {
+                val succeeded = try {
+                    session.addPublicKeyIdentity(keyPair)
+                    session.auth().verify(authTimeoutMs).isSuccess
                 } catch (e: Exception) {
-                    println("SFTP: SSH key authentication failed: ${e.message}")
-                    e.printStackTrace()
-                    // Fall back to password if key auth fails
-                    if (credential.password.isNotEmpty()) {
-                        try {
-                            session.addPasswordIdentity(credential.password)
-                            val authResult = session.auth()
-                            authResult.verify(15000).isSuccess
-                        } catch (e2: Exception) {
-                            println("SFTP: Password fallback also failed: ${e2.message}")
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                }
-            } else if (credential.password.isNotEmpty()) {
-                try {
-                    println("SFTP: Starting password authentication for user: ${credential.username}")
-                    session.addPasswordIdentity(credential.password)
-                    println("SFTP: Password identity added, attempting auth...")
-                    val authResult = session.auth()
-                    println("SFTP: Auth future created, verifying...")
-                    val isSuccess = authResult.verify(15000).isSuccess
-                    println("SFTP: Auth result: $isSuccess")
-                    isSuccess
-                } catch (e: Exception) {
-                    println("SFTP: Authentication failed with exception: ${e.message}")
-                    e.printStackTrace()
+                    GridLog.w(GridLog.TAG_SFTP, "Public key authentication failed", e)
                     false
                 }
-            } else {
-                false
+                if (succeeded) return true
             }
-            
-            if (!authenticated) {
-                session.close()
-                client.stop()
-                return@withContext Result.Error(Exception("Authentication failed"))
-            }
-            
-            // Create SFTP client - let's accept that this will likely fail and provide better error info
-            println("SFTP: Creating SFTP client...")
-            val sftp = try {
-                println("SFTP: Attempting SFTP client creation...")
-                val factory = SftpClientFactory.instance()
-                factory.createSftpClient(session)
-            } catch (e: Exception) {
-                println("SFTP: Failed to create SFTP client: ${e.message}")
-                e.printStackTrace()
-                session.close()
-                client.stop()
-                
-                // Provide helpful error message based on the known issue
-                val errorMessage = when {
-                    e.message?.contains("Closing while await init message") == true ->
-                        "SFTP subsystem initialization failed. This usually means:\n" +
-                        "1. The server doesn't have SFTP enabled/configured\n" +
-                        "2. The server is incompatible with this SFTP client\n" +
-                        "3. Firewall/network issues preventing SFTP traffic\n" +
-                        "Please check your server's SSH/SFTP configuration."
-                    else -> "Failed to initialize SFTP: ${e.message}"
-                }
-                
-                return@withContext Result.Error(Exception(errorMessage))
-            }
-            println("SFTP: SFTP client created successfully")
-            
-            this@SftpClient.sshClient = client
-            this@SftpClient.session = session
-            this@SftpClient.sftpClient = sftp
-            
-            Result.Success(Unit)
+        }
+
+        if (credential.password.isEmpty()) return false
+
+        return try {
+            session.addPasswordIdentity(credential.password)
+            session.auth().verify(authTimeoutMs).isSuccess
         } catch (e: Exception) {
-            Result.Error(e)
+            GridLog.w(GridLog.TAG_SFTP, "Password authentication failed", e)
+            false
         }
     }
-    
+
+    private fun sftpSubsystemMessage(e: Exception): String = when {
+        e.message?.contains("Closing while await init message") == true ->
+            "SFTP subsystem initialization failed. This usually means:\n" +
+                "1. The server doesn't have SFTP enabled/configured\n" +
+                "2. The server is incompatible with this SFTP client\n" +
+                "3. Firewall/network issues preventing SFTP traffic\n" +
+                "Please check your server's SSH/SFTP configuration."
+        else -> "Failed to initialize SFTP: ${e.message}"
+    }
+
     override suspend fun disconnect(): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             sftpClient?.close()
             session?.close()
-            sshClient?.stop()
-            
+
             sftpClient = null
             session = null
-            sshClient = null
-            
+
+            // Deliberately no sshClient.stop(): the SshClient is shared process-wide, and stopping it
+            // would close every other connection's session and block for up to STOP_WAIT_TIME.
+
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)
         }
     }
-    
+
     override suspend fun listFiles(path: String): Result<List<RemoteFile>> = withContext(Dispatchers.IO) {
         try {
             val client = sftpClient ?: return@withContext Result.Error(Exception("Not connected"))
@@ -280,7 +241,7 @@ class SftpClient @Inject constructor(
             // Finally, delete the empty directory
             client.rmdir(dirPath)
         } catch (e: Exception) {
-            println("SFTP: Error during recursive delete: ${e.message}")
+            GridLog.w(GridLog.TAG_SFTP, "Recursive delete failed, retrying rmdir", e)
             // Try to delete the directory anyway
             try {
                 client.rmdir(dirPath)
@@ -312,7 +273,7 @@ class SftpClient @Inject constructor(
         val inputStream = client.read(remotePath)
         
         try {
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(SshTuning.TRANSFER_BUFFER_BYTES)
             var bytesRead: Int
             
             while (inputStream.read(buffer).also { bytesRead = it } != -1) {
@@ -343,7 +304,7 @@ class SftpClient @Inject constructor(
         val outputStream = client.write(remotePath)
         
         try {
-            val buffer = ByteArray(8192)
+            val buffer = ByteArray(SshTuning.TRANSFER_BUFFER_BYTES)
             var bytesRead: Int
             
             while (localInputStream.read(buffer).also { bytesRead = it } != -1) {
@@ -366,30 +327,44 @@ class SftpClient @Inject constructor(
     }.flowOn(Dispatchers.IO)
     
     override fun isConnected(): Boolean {
-        return sftpClient != null && session?.isOpen == true
+        val sftp = sftpClient ?: return false
+        val current = session
+        // Consult the library's own liveness rather than just a non-null field. With heartbeats
+        // enabled, SSHD closes the session itself after the configured misses, so a dropped peer or a
+        // NAT rebind shows up here without us spending a round trip to find out.
+        return sftp.isOpen && current?.isOpen == true && current.isClosing == false
     }
 
+    /**
+     * Parses a user-supplied private key. Returns null for anything unparseable — including a public
+     * key pasted by mistake, which is a common enough error to be worth naming in the log.
+     *
+     * Nothing here logs the key's content, its length, or its header line: all three are usable
+     * fingerprints of the user's key material, and these logs ship in release builds.
+     */
     private fun loadKeyPair(privateKeyContent: String): java.security.KeyPair? {
         return try {
             val cleanedKey = privateKeyContent.trim()
-            println("SFTP: Attempting to parse SSH key (${cleanedKey.length} chars)")
-            println("SFTP: Key format: ${cleanedKey.lines().firstOrNull()}")
 
-            // Check if user accidentally provided public key instead of private key
             if (cleanedKey.startsWith("ssh-rsa ") || cleanedKey.startsWith("ssh-ed25519 ") ||
-                cleanedKey.startsWith("ecdsa-sha2-") || cleanedKey.startsWith("ssh-dss ")) {
-                println("SFTP: ERROR - This appears to be a PUBLIC key, not a private key!")
-                println("SFTP: Private keys should start with '-----BEGIN' (e.g., '-----BEGIN OPENSSH PRIVATE KEY-----')")
+                cleanedKey.startsWith("ecdsa-sha2-") || cleanedKey.startsWith("ssh-dss ")
+            ) {
+                GridLog.w(
+                    GridLog.TAG_SFTP,
+                    "Supplied key looks like a public key; a private key is required " +
+                        "(it should start with -----BEGIN)"
+                )
                 return null
             }
 
-            // Try PKCS8 format first (generated by Java KeyPairGenerator)
+            // PKCS8 (what Java's KeyPairGenerator emits) needs a manual path; SSHD's parser handles
+            // OpenSSH and PEM RSA.
             if (cleanedKey.contains("-----BEGIN PRIVATE KEY-----")) {
-                println("SFTP: Detected PKCS8 format key, parsing manually")
+                GridLog.d(GridLog.TAG_SFTP) { "Parsing key: PKCS8" }
                 return parsePkcs8Key(cleanedKey)
             }
 
-            // Try Apache SSHD's key loading utilities for other formats (OpenSSH, PEM RSA)
+            GridLog.d(GridLog.TAG_SFTP) { "Parsing key: OPENSSH/PEM" }
             val keyPairResourceParser = SecurityUtils.getKeyPairResourceParser()
             val inputStream = java.io.ByteArrayInputStream(cleanedKey.toByteArray(Charsets.UTF_8))
 
@@ -400,23 +375,15 @@ class SftpClient @Inject constructor(
                 inputStream
             )
 
-            if (keyPairs.isNotEmpty()) {
-                println("SFTP: Successfully loaded SSH key pair via Apache SSHD")
-                keyPairs.first()
-            } else {
-                println("SFTP: No key pairs found in provided content")
-                null
-            }
+            keyPairs.firstOrNull()
         } catch (e: Exception) {
-            println("SFTP: Failed to parse SSH key: ${e.message}")
-            e.printStackTrace()
+            GridLog.w(GridLog.TAG_SFTP, "Could not parse the supplied private key", e)
             null
         }
     }
 
     private fun parsePkcs8Key(pemContent: String): java.security.KeyPair? {
         return try {
-            // Extract base64 content between headers
             val base64Content = pemContent
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replace("-----END PRIVATE KEY-----", "")
@@ -425,20 +392,19 @@ class SftpClient @Inject constructor(
             val keyBytes = android.util.Base64.decode(base64Content, android.util.Base64.DEFAULT)
             val keySpec = java.security.spec.PKCS8EncodedKeySpec(keyBytes)
             val keyFactory = java.security.KeyFactory.getInstance("RSA")
-            val privateKey = keyFactory.generatePrivate(keySpec) as java.security.interfaces.RSAPrivateCrtKey
+            val privateKey =
+                keyFactory.generatePrivate(keySpec) as java.security.interfaces.RSAPrivateCrtKey
 
-            // Reconstruct public key from private key components
+            // Reconstruct the public key from the private key's components.
             val publicKeySpec = java.security.spec.RSAPublicKeySpec(
                 privateKey.modulus,
                 privateKey.publicExponent
             )
             val publicKey = keyFactory.generatePublic(publicKeySpec)
 
-            println("SFTP: Successfully parsed PKCS8 RSA key")
             java.security.KeyPair(publicKey, privateKey)
         } catch (e: Exception) {
-            println("SFTP: Failed to parse PKCS8 key: ${e.message}")
-            e.printStackTrace()
+            GridLog.w(GridLog.TAG_SFTP, "Could not parse the supplied PKCS8 key", e)
             null
         }
     }

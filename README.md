@@ -10,6 +10,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Browser**: Complete file browser with list and grid view modes
 - **File Upload**: Functional file upload with Material 3 expressive wavy progress indicators
 - **File Opening**: Open text, image, PDF, audio, video, archive, code, and ebook files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player, archive viewer, code viewer with syntax highlighting, ebook viewer with chapter navigation)
+- **APK Install**: Opening an `.apk` downloads it and hands it to the system installer, prompting once to allow Grid to install unknown apps if needed
 - **Archive Viewer**: Browse and extract ZIP, RAR, 7-Zip, TAR, and GZIP archives with hierarchical tree navigation, file metadata display, and one-click extraction with progress tracking
 - **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access

@@ -44,6 +44,7 @@ fun FileViewerTopBar(
         "MARKDOWN" -> if (isEditMode) "Text Editor" else "Markdown"
         "EBOOK" -> "Ebook"
         "ARCHIVE" -> "Archive"
+        "APK" -> "App"
         else -> "File"
     }
     

@@ -1037,7 +1037,7 @@ private fun handleFileOpen(
     val fileType = getFileType(file.name)
     
     when (fileType) {
-        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO, FileType.ARCHIVE, FileType.EBOOK -> {
+        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO, FileType.ARCHIVE, FileType.EBOOK, FileType.APK -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
                 val intent = Intent(context, com.defnf.grid.presentation.fileviewer.FileViewerActivity::class.java).apply {

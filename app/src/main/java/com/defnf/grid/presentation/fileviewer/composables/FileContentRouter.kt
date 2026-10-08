@@ -119,6 +119,13 @@ fun FileContentRouter(
             )
         }
         
+        "APK" -> {
+            ApkInstaller(
+                file = file,
+                modifier = modifier
+            )
+        }
+        
         else -> {
             UnsupportedFileViewer(
                 file = file,

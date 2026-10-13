@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.TextSnippet
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Code
@@ -19,7 +20,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * component), replacing the per-screen copies that previously drifted apart.
  */
 enum class FileType {
-    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, ARCHIVE, EBOOK, UNKNOWN
+    TEXT, CODE, MARKDOWN, IMAGE, PDF, AUDIO, VIDEO, ARCHIVE, EBOOK, APK, UNKNOWN
 }
 
 /** Extensions whose embedded album art can be shown as a thumbnail. */
@@ -34,6 +35,7 @@ fun getFileType(fileName: String): FileType {
     return when {
         extension in IMAGE_EXTENSIONS -> FileType.IMAGE
         extension == "pdf" -> FileType.PDF
+        extension == "apk" -> FileType.APK
         extension in AUDIO_EXTENSIONS -> FileType.AUDIO
         extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> FileType.VIDEO
         extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> FileType.ARCHIVE
@@ -59,6 +61,7 @@ fun getFileIcon(fileName: String): ImageVector {
 
     return when {
         extension == "pdf" -> Icons.Default.PictureAsPdf
+        extension == "apk" -> Icons.Default.Android
         extension in IMAGE_EXTENSIONS -> Icons.Default.Image
         extension in AUDIO_EXTENSIONS -> Icons.Default.AudioFile
         extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> Icons.Filled.PlayArrow

@@ -182,6 +182,7 @@ class CachedFilesViewModel @Inject constructor(
         return when {
             extension in setOf("jpg", "jpeg", "png", "bmp", "webp", "svg", "gif") -> "IMAGE"
             extension == "pdf" -> "PDF"
+            extension == "apk" -> "APK"
             extension in setOf("mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus") -> "AUDIO"
             extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> "VIDEO"
             extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> "ARCHIVE"

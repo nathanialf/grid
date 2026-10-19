@@ -122,8 +122,15 @@ class FileRepositoryImpl @Inject constructor(
             val encodedPath = file.path.replace('/', '|').replace('\\', '|')
             val tempFile = File(tempDir, "${System.currentTimeMillis()}_$encodedPath")
 
-            FileOutputStream(tempFile).use { outputStream ->
-                client.downloadFile(file.path, outputStream).collect { }
+            try {
+                FileOutputStream(tempFile).use { outputStream ->
+                    client.downloadFile(file.path, outputStream).collect { }
+                }
+            } catch (e: Throwable) {
+                // Each attempt (including a stale-session retry) writes a new timestamped file;
+                // don't leave the partial one behind.
+                tempFile.delete()
+                throw e
             }
             tempFile
         }

@@ -311,8 +311,13 @@ class SmbClient @Inject constructor(
             )
             // smbj's stream reads one request ahead; skipping before the first read only moves
             // its starting offset. Its close() doesn't close the file handle, so do that here.
-            val stream = file.inputStream
-            if (offset > 0) stream.skip(offset)
+            val stream = try {
+                file.inputStream.also { if (offset > 0) it.skip(offset) }
+            } catch (e: Exception) {
+                // Don't leak the server-side handle when the stream can't be set up
+                runCatching { file.close() }
+                throw e
+            }
             object : FilterInputStream(stream) {
                 override fun close() {
                     try {

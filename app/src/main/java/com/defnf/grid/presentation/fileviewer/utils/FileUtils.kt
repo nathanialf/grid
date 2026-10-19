@@ -1,7 +1,5 @@
 package com.defnf.grid.presentation.fileviewer.utils
 
-import com.defnf.grid.presentation.util.FileType
-import com.defnf.grid.presentation.util.getFileType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -40,13 +38,4 @@ object FileUtils {
             }
         }
     }
-    
-    /**
-     * Check if a file is editable based on its extension
-     * @param file The file to check
-     * @return true if the file can be edited
-     */
-    fun isEditableFile(file: File): Boolean =
-        // Same mapping the browser uses to pick a viewer, so the two never disagree
-        getFileType(file.name) in setOf(FileType.TEXT, FileType.CODE, FileType.MARKDOWN)
 }

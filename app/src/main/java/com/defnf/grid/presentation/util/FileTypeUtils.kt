@@ -53,7 +53,8 @@ fun getFileType(fileName: String): FileType {
             "gitignore", "makefile", "readme", "license", "changelog",
             "srt", "vtt", "nfo", "env", "rst", "patch", "diff", "m3u", "tex"
         ) -> FileType.TEXT
-        extension.isEmpty() || extension == fileName.lowercase() -> FileType.TEXT
+        // No extension (Makefile, README) or a dotfile (.bashrc, .profile, .htaccess)
+        extension.isEmpty() || fileName.lastIndexOf('.') == 0 -> FileType.TEXT
         // Unknown extensions (.iso, .docx, .exe...) are usually binary; reading them into the text
         // viewer showed garbage and could run out of memory.
         else -> FileType.UNKNOWN

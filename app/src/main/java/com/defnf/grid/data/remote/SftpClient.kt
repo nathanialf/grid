@@ -7,6 +7,11 @@ import com.defnf.grid.data.remote.telemetry.ConnectTrace
 import com.defnf.grid.domain.model.*
 import com.defnf.grid.util.GridLog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -172,28 +177,42 @@ class SftpClient @Inject constructor(
         try {
             val client = sftpClient ?: return@withContext Result.Error(Exception("Not connected"))
             
-            val files = client.readDir(path)
+            val files = client.readDir(path).filter { it.filename != "." && it.filename != ".." }
+            fun entryPath(name: String) = if (path.endsWith("/")) "$path$name" else "$path/$name"
+
+            // readDir reports a symlink itself; stat each link's target so links to folders (such as
+            // ~/media -> /mnt/media) can be browsed and linked files show their real size and date.
+            // The stats run concurrently, a few at a time, so a folder full of links costs a few
+            // round trips rather than one per link.
+            val linkGate = Semaphore(SYMLINK_STAT_CONCURRENCY)
+            val resolvedLinks = coroutineScope {
+                files.filter { it.attributes.isSymbolicLink }
+                    .map { entry ->
+                        async {
+                            val target = linkGate.withPermit {
+                                runCatching { client.stat(entryPath(entry.filename)) }.getOrNull()
+                            }
+                            entry.filename to target
+                        }
+                    }
+                    .awaitAll()
+                    .mapNotNull { (name, target) -> target?.let { name to it } }
+                    .toMap()
+            }
+
             val remoteFiles = files.map { entry ->
                 val attrs = entry.attributes
-                val entryPath = if (path.endsWith("/")) "$path${entry.filename}" else "$path/${entry.filename}"
-                // readDir reports the link itself; resolve symlinks (one extra round trip each) so
-                // links to folders such as ~/media -> /mnt/media can be browsed, and linked files
-                // show their real size and date.
-                val target = if (attrs.isSymbolicLink) {
-                    runCatching { client.stat(entryPath) }.getOrNull() ?: attrs
-                } else {
-                    attrs
-                }
+                val target = resolvedLinks[entry.filename] ?: attrs
                 RemoteFile(
                     name = entry.filename,
-                    path = entryPath,
+                    path = entryPath(entry.filename),
                     isDirectory = target.isDirectory,
                     size = target.size,
                     lastModified = target.modifyTime?.toMillis() ?: 0L,
                     permissions = attrs.permissions.toString(),
                     isHidden = entry.filename.startsWith(".")
                 )
-            }.filter { it.name != "." && it.name != ".." }
+            }
             
             Result.Success(remoteFiles)
         } catch (e: Exception) {
@@ -443,3 +462,6 @@ class SftpClient @Inject constructor(
         }
     }
 }
+
+/** How many symlink targets a directory listing stats at once on one session. */
+private const val SYMLINK_STAT_CONCURRENCY = 8

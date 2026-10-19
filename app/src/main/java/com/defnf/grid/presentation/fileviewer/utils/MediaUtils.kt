@@ -1,10 +1,10 @@
 package com.defnf.grid.presentation.fileviewer.utils
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.util.Log
 import androidx.media3.common.MediaMetadata
+import com.defnf.grid.data.image.decodeSampledBitmap
 import com.defnf.grid.presentation.fileviewer.models.AudioMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -66,16 +66,4 @@ suspend fun audioMetadataFrom(metadata: MediaMetadata): AudioMetadata = withCont
     )
 }
 
-private fun decodeAlbumArt(bytes: ByteArray): Bitmap? {
-    if (bytes.isEmpty()) return null
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
-    var sampleSize = 1
-    while (maxOf(bounds.outWidth, bounds.outHeight) / (sampleSize * 2) >= MAX_ALBUM_ART_PX) {
-        sampleSize *= 2
-    }
-    val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
-}
+private fun decodeAlbumArt(bytes: ByteArray): Bitmap? = decodeSampledBitmap(bytes, MAX_ALBUM_ART_PX)?.first

@@ -217,7 +217,9 @@ class FileBrowserViewModel @Inject constructor(
             val tempDir = tempFile.parentFile ?: application.cacheDir
             // Download next to the cache entry and swap it in only once complete, so a cancelled
             // or failed transfer never leaves a truncated file that looks like a valid cache hit.
-            val partFile = File(tempDir, "${tempFile.name}.part")
+            // Unique per attempt: a cancelled download may still be writing (and then deleting) its
+            // part file while a re-tap's new download has already started.
+            val partFile = File(tempDir, "${tempFile.name}.${java.util.UUID.randomUUID()}.part")
             try {
                 val cached = withContext(ioDispatcher) {
                     tempDir.mkdirs()
@@ -267,6 +269,9 @@ class FileBrowserViewModel @Inject constructor(
                 onFileReady(tempFile)
             } catch (exception: Exception) {
                 withContext(NonCancellable + ioDispatcher) { partFile.delete() }
+                // A newer download of the same file owns the progress state now; leave it alone.
+                val owner = downloadJobs[file.path]
+                if (owner != null && owner !== coroutineContext[Job]) return@launch
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles - file.path,
                     downloadProgress = _uiState.value.downloadProgress - file.path,
@@ -409,11 +414,17 @@ class FileBrowserViewModel @Inject constructor(
                             .collect { fileTransfer ->
                                 if (currentUploadTransferId == null) {
                                     currentUploadTransferId = fileTransfer.id
-                                    // Only now is there a partial remote file that cancel may clean
-                                    // up; before this point the path may be someone's existing file.
-                                    currentUploadRemotePath = remotePath
                                 }
                                 if (fileTransfer.id != currentUploadTransferId) return@collect
+                                // The repository's first emission precedes opening the remote file, so
+                                // only once bytes have been written is there a partial file of ours
+                                // that cancel may clean up; before that the path may be someone's
+                                // existing file.
+                                if (fileTransfer.state == TransferState.IN_PROGRESS &&
+                                    fileTransfer.progress.bytesTransferred > 0
+                                ) {
+                                    currentUploadRemotePath = remotePath
+                                }
 
                                 when (fileTransfer.state) {
                                     TransferState.COMPLETED -> {

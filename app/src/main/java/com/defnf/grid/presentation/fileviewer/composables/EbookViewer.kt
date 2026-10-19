@@ -204,8 +204,10 @@ fun EbookPagerContent(
     
     LaunchedEffect(pagerState) {
         // currentChapterIndex here would be the value captured on first composition, so always
-        // report the page; the ViewModel ignores no-op changes.
-        snapshotFlow { pagerState.currentPage }.collect { page ->
+        // report the page; the ViewModel ignores no-op changes. Report only settled pages: the
+        // pages passed through while animating to a chapter picked from the table of contents
+        // would otherwise retarget the ViewModel mid-animation and strand the reader there.
+        snapshotFlow { pagerState.settledPage }.collect { page ->
             onChapterChanged(page)
         }
     }

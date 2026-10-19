@@ -19,7 +19,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.defnf.grid.presentation.theme.GridTheme
 import com.defnf.grid.presentation.theme.GridThemeProvider
 import com.defnf.grid.presentation.fileviewer.composables.*
-import com.defnf.grid.presentation.fileviewer.utils.FileUtils
 import com.defnf.grid.presentation.fileviewer.utils.animateColorScheme
 import com.defnf.grid.presentation.fileviewer.utils.seedColorScheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -172,7 +171,7 @@ fun FileViewerScreen(
                         fileName = fileName,
                         fileType = fileType,
                         // Only these routes have an editor (streams have no local file at all)
-                        canEdit = fileType in EDITABLE_TYPES && FileUtils.isEditableFile(File(fileName)),
+                        canEdit = fileType in EDITABLE_TYPES,
                         isEditMode = uiState.isEditMode,
                         canSave = editorActions?.hasUnsavedChanges == true,
                         isSaving = editorActions?.isSaving == true,

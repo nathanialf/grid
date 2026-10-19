@@ -52,7 +52,9 @@ fun getFileType(fileName: String): FileType {
             "gitignore", "makefile", "readme", "license", "changelog"
         ) -> FileType.TEXT
         extension.isEmpty() || extension == fileName.lowercase() -> FileType.TEXT
-        else -> FileType.TEXT
+        // Unknown extensions (.iso, .docx, .exe...) are usually binary; reading them into the text
+        // viewer showed garbage and could run out of memory.
+        else -> FileType.UNKNOWN
     }
 }
 

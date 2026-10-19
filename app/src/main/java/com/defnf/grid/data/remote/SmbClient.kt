@@ -198,7 +198,7 @@ class SmbClient @Inject constructor(
                     path = if (path.endsWith("\\")) "$path${fileInfo.fileName}" else "$path\\${fileInfo.fileName}",
                     isDirectory = isDirectory,
                     size = fileInfo.endOfFile,
-                    lastModified = 0L, // TODO: Fix FileTime conversion
+                    lastModified = fileInfo.lastWriteTime?.toEpochMillis() ?: 0L,
                     isHidden = fileInfo.fileAttributes and FileAttributes.FILE_ATTRIBUTE_HIDDEN.value != 0L
                 )
             }.filter { it.name != "." && it.name != ".." }
@@ -241,42 +241,9 @@ class SmbClient @Inject constructor(
     }
     
     private fun deleteDirectoryRecursive(share: DiskShare, path: String) {
-        try {
-            // List all items in the directory
-            val items = share.list(path)
-            
-            for (item in items) {
-                // Skip . and .. entries
-                if (item.fileName == "." || item.fileName == "..") {
-                    continue
-                }
-                
-                val itemPath = if (path.endsWith("/")) {
-                    "$path${item.fileName}"
-                } else {
-                    "$path/${item.fileName}"
-                }
-                
-                val itemInfo = share.getFileInformation(itemPath)
-                if (itemInfo.standardInformation.isDirectory) {
-                    // Recursively delete subdirectory
-                    deleteDirectoryRecursive(share, itemPath)
-                } else {
-                    // Delete file
-                    share.rm(itemPath)
-                }
-            }
-            
-            // Finally, delete the empty directory
-            share.rmdir(path, true)
-        } catch (e: Exception) {
-            // If the recursive delete fails, try to force delete the directory
-            try {
-                share.rmdir(path, true)
-            } catch (fallbackEx: Exception) {
-                throw e // Throw the original exception
-            }
-        }
+        // smbj's recursive rmdir walks the tree using the attributes from each listing, so it
+        // skips the per-entry getFileInformation round trips (and uses SMB '\\' separators).
+        share.rmdir(path, true)
     }
     
     override suspend fun renameFile(oldPath: String, newPath: String): Result<Unit> = withContext(Dispatchers.IO) {
@@ -387,7 +354,9 @@ class SmbClient @Inject constructor(
             EnumSet.of(AccessMask.GENERIC_WRITE),
             null,
             SMB2ShareAccess.ALL,
-            SMB2CreateDisposition.FILE_CREATE,
+            // Overwrite like SFTP does; FILE_CREATE failed whenever the file already existed,
+            // which broke saving an edited file back and retrying a failed upload.
+            SMB2CreateDisposition.FILE_OVERWRITE_IF,
             null
         )
         

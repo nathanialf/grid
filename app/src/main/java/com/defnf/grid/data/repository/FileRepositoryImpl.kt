@@ -73,7 +73,9 @@ class FileRepositoryImpl @Inject constructor(
         file: RemoteFile,
         localPath: String
     ) {
-        pool.withClient(connection, retryOnStale = false) { client ->
+        // Downloads don't change remote state and reopen (truncate) the output on each attempt,
+        // so a pooled session that went stale (e.g. after a Wi-Fi/cellular switch) can be retried.
+        pool.withClient(connection, retryOnStale = true) { client ->
             val localFile = File(localPath)
             localFile.parentFile?.mkdirs()
             FileOutputStream(localFile).use { outputStream ->
@@ -110,7 +112,7 @@ class FileRepositoryImpl @Inject constructor(
     }
 
     override suspend fun downloadFileToTemp(connection: Connection, file: RemoteFile): File =
-        pool.withClient(connection, retryOnStale = false) { client ->
+        pool.withClient(connection, retryOnStale = true) { client ->
             val tempDir = File(
                 System.getProperty("java.io.tmpdir"),
                 "grid_documents/${connection.id}"

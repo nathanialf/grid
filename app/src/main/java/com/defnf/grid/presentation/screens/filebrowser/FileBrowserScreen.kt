@@ -8,8 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
@@ -64,7 +63,10 @@ fun FileBrowserScreen(
     onNavigateBack: () -> Unit,
     viewModel: FileBrowserViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val visibleFiles = remember(uiState.files, uiState.showHiddenFiles) {
+        uiState.files.filter { !it.isHidden || uiState.showHiddenFiles }
+    }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -448,10 +450,12 @@ fun FileBrowserScreen(
                         }
                         
                         items(
-                            items = uiState.files.filter { !it.isHidden || uiState.showHiddenFiles },
-                            key = { file -> file.path }
+                            items = visibleFiles,
+                            key = { file -> file.path },
+                            contentType = { file -> if (file.isDirectory) "directory" else "file" }
                         ) { file ->
                             FileGridItem(
+                                modifier = Modifier.animateItem(),
                                 file = file,
                                 thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
                                 onClick = {
@@ -509,10 +513,12 @@ fun FileBrowserScreen(
                         }
                         
                         items(
-                            items = uiState.files.filter { !it.isHidden || uiState.showHiddenFiles },
-                            key = { file -> file.path }
+                            items = visibleFiles,
+                            key = { file -> file.path },
+                            contentType = { file -> if (file.isDirectory) "directory" else "file" }
                         ) { file ->
                             FileItem(
+                                modifier = Modifier.animateItem(),
                                 file = file,
                                 thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
                                 onClick = {
@@ -843,6 +849,7 @@ private fun ParentDirectoryItem(
 private fun FileItem(
     file: RemoteFile,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
@@ -854,37 +861,41 @@ private fun FileItem(
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
     val hapticFeedback = LocalHapticFeedback.current
     
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = if (isSelected) {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
         } else {
-            CardDefaults.cardColors()
-        }
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        label = "FileItemContainer"
+    )
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .pointerInput(isSelectionMode) {
-                    detectTapGestures(
-                        onTap = {
-                            if (isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSelectionToggle()
-                            } else {
-                                onClick()
-                            }
-                        },
-                        onLongPress = {
-                            if (!isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onLongPress()
-                            }
+                // combinedClickable always calls the latest lambdas (a pointerInput keyed only on
+                // selection mode kept stale ones, so tapping a downloading file started a second
+                // download instead of cancelling), and adds ripple + TalkBack actions.
+                .combinedClickable(
+                    onClick = {
+                        if (isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSelectionToggle()
+                        } else {
+                            onClick()
                         }
-                    )
-                }
+                    },
+                    onLongClickLabel = "Select",
+                    onLongClick = {
+                        if (!isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLongPress()
+                        }
+                    }
+                )
         ) {
             Row(
                 modifier = Modifier
@@ -1037,7 +1048,9 @@ private fun handleFileOpen(
     val fileType = getFileType(file.name)
     
     when (fileType) {
-        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO, FileType.ARCHIVE, FileType.EBOOK, FileType.APK -> {
+        // UNKNOWN opens in the viewer too, which offers to hand the file to another app.
+        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO,
+        FileType.VIDEO, FileType.ARCHIVE, FileType.EBOOK, FileType.APK, FileType.UNKNOWN -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
                 val intent = Intent(context, com.defnf.grid.presentation.fileviewer.FileViewerActivity::class.java).apply {
@@ -1049,10 +1062,6 @@ private fun handleFileOpen(
                 }
                 fileViewerLauncher.launch(intent)
             }
-        }
-        FileType.UNKNOWN -> {
-            // Fallback to download for unknown types
-            viewModel.downloadFile(file, "/tmp/${file.name}")
         }
     }
 }
@@ -1096,6 +1105,7 @@ private fun ParentDirectoryGridItem(
 private fun FileGridItem(
     file: RemoteFile,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
@@ -1105,39 +1115,43 @@ private fun FileGridItem(
     thumbnailFile: File? = null
 ) {
     val hapticFeedback = LocalHapticFeedback.current
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        label = "FileGridItemContainer"
+    )
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1.5f),
-        colors = if (isSelected) {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        } else {
-            CardDefaults.cardColors()
-        }
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(isSelectionMode) {
-                    detectTapGestures(
-                        onTap = {
-                            if (isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSelectionToggle()
-                            } else {
-                                onClick()
-                            }
-                        },
-                        onLongPress = {
-                            if (!isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onLongPress()
-                            }
+                // combinedClickable always calls the latest lambdas (a pointerInput keyed only on
+                // selection mode kept stale ones, so tapping a downloading file started a second
+                // download instead of cancelling), and adds ripple + TalkBack actions.
+                .combinedClickable(
+                    onClick = {
+                        if (isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSelectionToggle()
+                        } else {
+                            onClick()
                         }
-                    )
-                }
+                    },
+                    onLongClickLabel = "Select",
+                    onLongClick = {
+                        if (!isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLongPress()
+                        }
+                    }
+                )
         ) {
             // When a real thumbnail is cached, let it fill the whole card and lay the name over a
             // gradient scrim so it stays legible against the image.

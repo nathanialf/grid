@@ -166,10 +166,18 @@ class SftpClient @Inject constructor(
             val files = client.readDir(path)
             val remoteFiles = files.map { entry ->
                 val attrs = entry.attributes
+                val entryPath = if (path.endsWith("/")) "$path${entry.filename}" else "$path/${entry.filename}"
+                // readDir reports the link itself; resolve symlinks (one extra round trip each) so
+                // links to folders such as ~/media -> /mnt/media can be browsed.
+                val isDirectory = if (attrs.isSymbolicLink) {
+                    runCatching { client.stat(entryPath).isDirectory }.getOrDefault(false)
+                } else {
+                    attrs.isDirectory
+                }
                 RemoteFile(
                     name = entry.filename,
-                    path = if (path.endsWith("/")) "$path${entry.filename}" else "$path/${entry.filename}",
-                    isDirectory = attrs.isDirectory,
+                    path = entryPath,
+                    isDirectory = isDirectory,
                     size = attrs.size,
                     lastModified = attrs.modifyTime?.toMillis() ?: 0L,
                     permissions = attrs.permissions.toString(),
@@ -198,8 +206,9 @@ class SftpClient @Inject constructor(
         try {
             val client = sftpClient ?: return@withContext Result.Error(Exception("Not connected"))
             
-            val attrs = client.stat(path)
-            if (attrs.isDirectory) {
+            // lstat, not stat: a symlink to a directory must be unlinked, never followed and emptied
+            val attrs = client.lstat(path)
+            if (attrs.isDirectory && !attrs.isSymbolicLink) {
                 // Recursively delete directory contents
                 deleteDirectoryRecursive(client, path)
             } else {

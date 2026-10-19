@@ -203,10 +203,10 @@ fun EbookPagerContent(
     }
     
     LaunchedEffect(pagerState) {
+        // currentChapterIndex here would be the value captured on first composition, so always
+        // report the page; the ViewModel ignores no-op changes.
         snapshotFlow { pagerState.currentPage }.collect { page ->
-            if (page != currentChapterIndex) {
-                onChapterChanged(page)
-            }
+            onChapterChanged(page)
         }
     }
     

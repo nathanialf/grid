@@ -31,6 +31,19 @@ data class ExtractionProgress(
 }
 
 class ArchiveExtractor {
+
+    /**
+     * Resolves an archive entry inside [outputDirectory], rejecting entries such as
+     * `../../shared_prefs/x.xml` that would escape it ("Zip Slip").
+     */
+    private fun safeOutputFile(outputDirectory: File, entryName: String): File {
+        val file = File(outputDirectory, entryName)
+        val root = outputDirectory.canonicalPath + File.separator
+        if (!file.canonicalPath.startsWith(root)) {
+            throw IOException("Blocked archive entry outside the extraction folder: $entryName")
+        }
+        return file
+    }
     
     fun extractArchive(
         archiveFile: File,
@@ -103,7 +116,7 @@ class ArchiveExtractor {
             var entry = zipStream.nextEntry
             while (entry != null) {
                 if (!entry.name.startsWith("__MACOSX/") && !entry.name.startsWith(".DS_Store")) {
-                    val outputFile = File(outputDirectory, entry.name)
+                    val outputFile = safeOutputFile(outputDirectory, entry.name)
                     
                     emit(ExtractionProgress(
                         currentFile = entry.name,
@@ -157,7 +170,7 @@ class ArchiveExtractor {
                     totalBytes = totalBytes
                 ))
                 
-                val outputFile = File(outputDirectory, fileHeader.fileName)
+                val outputFile = safeOutputFile(outputDirectory, fileHeader.fileName)
                 
                 if (fileHeader.isDirectory) {
                     outputFile.mkdirs()
@@ -212,7 +225,7 @@ class ArchiveExtractor {
                             totalBytes = totalBytes
                         ))
                         
-                        val outputFile = File(outputDirectory, extractEntry.name)
+                        val outputFile = safeOutputFile(outputDirectory, extractEntry.name)
                         
                         if (extractEntry.isDirectory) {
                             outputFile.mkdirs()
@@ -287,7 +300,7 @@ class ArchiveExtractor {
                         totalBytes = totalBytes
                     ))
                     
-                    val outputFile = File(outputDirectory, entry.name)
+                    val outputFile = safeOutputFile(outputDirectory, entry.name)
                     
                     if (entry.isDirectory) {
                         outputFile.mkdirs()

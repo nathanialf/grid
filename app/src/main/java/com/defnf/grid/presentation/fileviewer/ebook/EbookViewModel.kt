@@ -9,7 +9,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 
@@ -45,6 +47,8 @@ class EbookViewModel @Inject constructor(
 
     fun loadEbook(file: File) {
         Log.d(TAG, "loadEbook called for file: ${file.name}")
+        // The ViewModel outlives rotation; don't re-parse the book or re-ask "Resume reading?"
+        if (currentFile == file && _uiState.value !is EbookUiState.Error) return
         currentFile = file
         
         viewModelScope.launch {
@@ -53,7 +57,8 @@ class EbookViewModel @Inject constructor(
             
             try {
                 Log.d(TAG, "Starting EPUB parsing...")
-                val parseResult = epubParser.parseEpub(file)
+                // Unzipping, DOM/Jsoup parsing and image reads are heavy; keep them off the main thread
+                val parseResult = withContext(Dispatchers.Default) { epubParser.parseEpub(file) }
                 
                 if (parseResult.isSuccess) {
                     val bookInfo = parseResult.getOrThrow()
@@ -123,6 +128,8 @@ class EbookViewModel @Inject constructor(
         val currentState = _uiState.value
         if (currentState is EbookUiState.Success) {
             val newIndex = chapterIndex.coerceIn(0, currentState.bookInfo.totalChapters - 1)
+            // Already there: keep the restored scroll offset instead of resetting it
+            if (newIndex == currentState.currentChapterIndex) return
             Log.d(TAG, "Navigating to chapter $newIndex (clamped from $chapterIndex)")
             _uiState.value = currentState.copy(
                 currentChapterIndex = newIndex,

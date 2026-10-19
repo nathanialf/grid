@@ -1,5 +1,7 @@
 package com.defnf.grid.data.remote.pool
 
+import com.hierynomus.mserref.NtStatus
+import com.hierynomus.mssmb2.SMBApiException
 import com.hierynomus.protocol.transport.TransportException
 import com.hierynomus.smbj.common.SMBRuntimeException
 import org.apache.sshd.common.SshException
@@ -20,6 +22,14 @@ import java.nio.channels.ClosedChannelException
 internal object ConnectionFaults {
 
     private const val MAX_CAUSE_DEPTH = 8
+
+    private val DEAD_SESSION_STATUSES = setOf(
+        NtStatus.STATUS_NETWORK_SESSION_EXPIRED,
+        NtStatus.STATUS_USER_SESSION_DELETED,
+        NtStatus.STATUS_NETWORK_NAME_DELETED,
+        NtStatus.STATUS_CONNECTION_DISCONNECTED,
+        NtStatus.STATUS_CONNECTION_RESET
+    )
 
     /** Message fragments that signal a dead transport when the exception type alone is ambiguous. */
     private val CLOSED_MARKERS = listOf(
@@ -42,7 +52,13 @@ internal object ConnectionFaults {
         is EOFException,
         is ClosedChannelException,
         is SshException,
-        is TransportException,
+        is TransportException -> true
+
+        // SMBApiException extends SMBRuntimeException but is usually the server answering
+        // (not found, access denied); only session/connection teardown statuses mean the
+        // transport is gone. Must be matched before SMBRuntimeException.
+        is SMBApiException -> status in DEAD_SESSION_STATUSES
+
         is SMBRuntimeException -> true
 
         is IOException -> {

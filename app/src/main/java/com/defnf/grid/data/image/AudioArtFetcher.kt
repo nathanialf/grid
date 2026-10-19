@@ -11,6 +11,7 @@ import coil.fetch.FetchResult
 import coil.fetch.Fetcher
 import coil.key.Keyer
 import coil.request.Options
+import coil.size.pxOrElse
 import java.io.File
 
 /**
@@ -27,6 +28,7 @@ data class AudioArtRequest(val file: File)
  */
 class AudioArtFetcher(
     private val request: AudioArtRequest,
+    private val options: Options,
     private val context: Context,
 ) : Fetcher {
 
@@ -36,11 +38,24 @@ class AudioArtFetcher(
             retriever.setDataSource(request.file.absolutePath)
             val bytes = retriever.embeddedPicture
                 ?: error("No embedded album art in ${request.file.name}")
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            // Covers are often 1500-3000px; decode only as large as the requested thumbnail so a
+            // 40dp row doesn't hold (and memory-cache) a ~36 MB bitmap.
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            val targetPx = maxOf(
+                options.size.width.pxOrElse { 0 },
+                options.size.height.pxOrElse { 0 }
+            ).takeIf { it > 0 } ?: DEFAULT_TARGET_PX
+            var sampleSize = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sampleSize * 2) >= targetPx) {
+                sampleSize *= 2
+            }
+            val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
                 ?: error("Failed to decode album art in ${request.file.name}")
             return DrawableResult(
                 drawable = bitmap.toDrawable(context.resources),
-                isSampled = false,
+                isSampled = sampleSize > 1,
                 dataSource = DataSource.DISK,
             )
         } finally {
@@ -50,7 +65,11 @@ class AudioArtFetcher(
 
     class Factory(private val context: Context) : Fetcher.Factory<AudioArtRequest> {
         override fun create(data: AudioArtRequest, options: Options, imageLoader: ImageLoader): Fetcher =
-            AudioArtFetcher(data, context.applicationContext)
+            AudioArtFetcher(data, options, context.applicationContext)
+    }
+
+    private companion object {
+        const val DEFAULT_TARGET_PX = 512
     }
 }
 

@@ -17,7 +17,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import javax.inject.Inject
 
@@ -58,8 +60,11 @@ class AddConnectionViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isGeneratingKey = true)
             try {
-                val publicKey = sshKeyManager.generateKeyPair(DEFAULT_KEY_NAME, 4096)
-                val privateKey = sshKeyManager.getPrivateKey(DEFAULT_KEY_NAME)
+                // RSA-4096 generation takes seconds; doing it on Main froze the "Generating..." UI
+                val (publicKey, privateKey) = withContext(Dispatchers.Default) {
+                    sshKeyManager.generateKeyPair(DEFAULT_KEY_NAME, 4096) to
+                        sshKeyManager.getPrivateKey(DEFAULT_KEY_NAME)
+                }
 
                 _uiState.value = _uiState.value.copy(
                     isGeneratingKey = false,
@@ -196,12 +201,13 @@ class AddConnectionViewModel @Inject constructor(
                     createConnectionUseCase(connection)
                 }
 
-                _uiState.value = state.copy(
+                // Copy from the latest state: the user may have kept typing during the save
+                _uiState.value = _uiState.value.copy(
                     isSaving = false,
                     isSaved = true
                 )
             } catch (exception: Exception) {
-                _uiState.value = state.copy(
+                _uiState.value = _uiState.value.copy(
                     isSaving = false,
                     error = exception.message ?: "Failed to save connection"
                 )
@@ -240,12 +246,13 @@ class AddConnectionViewModel @Inject constructor(
 
                 val result = testConnectionUseCase(connection, credential)
                 
-                _uiState.value = state.copy(
+                // Copy from the latest state so edits made during a slow test aren't reverted
+                _uiState.value = _uiState.value.copy(
                     isTesting = false,
                     testResult = if (result.isSuccess) "Connection successful!" else "Connection failed: ${result.error}"
                 )
             } catch (exception: Exception) {
-                _uiState.value = state.copy(
+                _uiState.value = _uiState.value.copy(
                     isTesting = false,
                     testResult = "Connection failed: ${exception.message}"
                 )

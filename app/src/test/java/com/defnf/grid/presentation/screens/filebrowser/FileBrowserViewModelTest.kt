@@ -11,6 +11,7 @@ import com.defnf.grid.domain.model.FileTransfer
 import com.defnf.grid.domain.model.TransferProgress
 import com.defnf.grid.domain.model.TransferState
 import com.defnf.grid.domain.repository.FileRepository
+import com.defnf.grid.data.remote.ssh.HostKeyVerifier
 import com.defnf.grid.domain.usecase.connection.GetConnectionUseCase
 import com.defnf.grid.domain.usecase.file.CreateDirectoryUseCase
 import com.defnf.grid.domain.usecase.file.DeleteFileUseCase
@@ -82,6 +83,10 @@ class FileBrowserViewModelTest {
             renameDirUseCase = mockk<RenameDirUseCase>(relaxed = true),
             getSettingsUseCase = mockk<GetSettingsUseCase>(relaxed = true),
             fileRepository = mockk<FileRepository>(relaxed = true),
+            hostKeyVerifier = mockk<HostKeyVerifier>(relaxed = true),
+            // File I/O runs on the injected dispatcher; keep it on the test scheduler so
+            // advanceUntilIdle() covers it.
+            ioDispatcher = mainDispatcherRule.testDispatcher,
             savedStateHandle = SavedStateHandle()
         )
         // uploadFiles requires a live connection; inject one directly (value is only passed
@@ -118,8 +123,9 @@ class FileBrowserViewModelTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isUploading)
-        assertTrue(state.message!!.contains("Uploaded 1 files"))
-        assertTrue(state.message!!.contains("failed to upload 1 files"))
+        val message = state.message!!
+        assertTrue(message.contains("Uploaded 1 files"))
+        assertTrue(message.contains("failed to upload 1 files"))
         coVerify(exactly = 2) { uploadFileUseCase.uploadWithProgress(any(), any(), any()) }
     }
 

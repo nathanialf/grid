@@ -73,7 +73,9 @@ class FileRepositoryImpl @Inject constructor(
         file: RemoteFile,
         localPath: String
     ) {
-        pool.withClient(connection, retryOnStale = false) { client ->
+        // Downloads don't change remote state and reopen (truncate) the output on each attempt,
+        // so a pooled session that went stale (e.g. after a Wi-Fi/cellular switch) can be retried.
+        pool.withClient(connection, retryOnStale = true) { client ->
             val localFile = File(localPath)
             localFile.parentFile?.mkdirs()
             FileOutputStream(localFile).use { outputStream ->
@@ -110,7 +112,7 @@ class FileRepositoryImpl @Inject constructor(
     }
 
     override suspend fun downloadFileToTemp(connection: Connection, file: RemoteFile): File =
-        pool.withClient(connection, retryOnStale = false) { client ->
+        pool.withClient(connection, retryOnStale = true) { client ->
             val tempDir = File(
                 System.getProperty("java.io.tmpdir"),
                 "grid_documents/${connection.id}"
@@ -120,8 +122,15 @@ class FileRepositoryImpl @Inject constructor(
             val encodedPath = file.path.replace('/', '|').replace('\\', '|')
             val tempFile = File(tempDir, "${System.currentTimeMillis()}_$encodedPath")
 
-            FileOutputStream(tempFile).use { outputStream ->
-                client.downloadFile(file.path, outputStream).collect { }
+            try {
+                FileOutputStream(tempFile).use { outputStream ->
+                    client.downloadFile(file.path, outputStream).collect { }
+                }
+            } catch (e: Throwable) {
+                // Each attempt (including a stale-session retry) writes a new timestamped file;
+                // don't leave the partial one behind.
+                tempFile.delete()
+                throw e
             }
             tempFile
         }
@@ -232,7 +241,8 @@ class FileRepositoryImpl @Inject constructor(
 
         return cacheDir.listFiles()?.mapNotNull { file ->
             // Filename format from FileBrowserViewModel: {connectionId}_{encodedPath}_{filename}
-            if (file.isFile && file.name.startsWith("${connectionId}_")) {
+            // .part files are downloads still in progress (or interrupted), not cached files
+            if (file.isFile && file.name.startsWith("${connectionId}_") && !file.name.endsWith(".part")) {
                 val withoutConnectionId = file.name.removePrefix("${connectionId}_")
                 // The format is: encodedPath_filename where encodedPath has / and \ replaced with _
                 // We need to find the original filename - it's after the last segment

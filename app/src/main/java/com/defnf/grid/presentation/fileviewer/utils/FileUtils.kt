@@ -38,27 +38,4 @@ object FileUtils {
             }
         }
     }
-    
-    /**
-     * Check if a file is editable based on its extension
-     * @param file The file to check
-     * @return true if the file can be edited
-     */
-    fun isEditableFile(file: File): Boolean {
-        val extension = file.extension.lowercase()
-        return extension in setOf(
-            // Text files
-            "txt", "text", "log", "csv", "tsv",
-            // Code files
-            "js", "ts", "jsx", "tsx", "java", "kt", "py", "cpp", "c", "h", "cs", "php", 
-            "rb", "go", "rs", "swift", "css", "scss", "sass", "html", "htm", "xml", 
-            "json", "yaml", "yml", "sql", "sh", "bat", "ps1", "dockerfile", "gradle",
-            "groovy", "scala", "clj", "elm", "dart", "vue", "svelte",
-            // Markdown files
-            "md", "markdown", "mdown", "mkd",
-            // Config files
-            "properties", "ini", "cfg", "conf", "toml",
-            "gitignore", "makefile", "readme", "license", "changelog"
-        )
-    }
 }

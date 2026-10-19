@@ -2,6 +2,7 @@ package com.defnf.grid.presentation.fileviewer.composables
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import java.io.File
 
 @Composable
@@ -13,8 +14,10 @@ fun FileContentRouter(
     fileName: String? = null,
     connectionId: String? = null,
     remotePath: String? = null,
+    streamUri: String? = null,
     onEditorActionsChanged: (TextEditorActions) -> Unit = {},
     onArchiveActionsChanged: (ArchiveViewerActions) -> Unit = {},
+    onThemeSeedChanged: (Color?) -> Unit = {},
     onSaveFile: (String) -> Unit = {},
     onExitEditor: () -> Unit = {}
 ) {
@@ -90,7 +93,9 @@ fun FileContentRouter(
                 fileName = fileName,
                 connectionId = connectionId,
                 remotePath = remotePath,
-                modifier = modifier
+                streamUri = streamUri,
+                modifier = modifier,
+                onThemeSeedChanged = onThemeSeedChanged
             )
         }
         
@@ -100,6 +105,7 @@ fun FileContentRouter(
                 fileName = fileName,
                 connectionId = connectionId,
                 remotePath = remotePath,
+                streamUri = streamUri,
                 modifier = modifier
             )
         }
@@ -129,6 +135,7 @@ fun FileContentRouter(
         else -> {
             UnsupportedFileViewer(
                 file = file,
+                displayName = fileName ?: file.name,
                 modifier = modifier
             )
         }

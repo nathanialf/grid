@@ -2,174 +2,136 @@ package com.defnf.grid.presentation.fileviewer
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.session.MediaController
+import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionToken
-import kotlinx.coroutines.CompletableDeferred
+import com.google.common.util.concurrent.ListenableFuture
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
+import kotlin.coroutines.resume
 
 /**
  * Singleton manager for MediaController instances to prevent playback restart
  * when navigating back from notifications or other activities.
+ *
+ * One controller is kept per playback service and reused across files: switching tracks only
+ * swaps the media item instead of tearing down and reconnecting to the session.
  */
 object MediaControllerManager {
-    
-    private var audioController: MediaController? = null
-    private var videoController: MediaController? = null
-    private var currentAudioFile: String? = null
-    private var currentVideoFile: String? = null
-    private var audioControllerFuture: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
-    private var videoControllerFuture: com.google.common.util.concurrent.ListenableFuture<MediaController>? = null
-    
+
+    private const val TAG = "MediaControllerManager"
+
+    private val audio = ControllerSlot(AudioPlayerService::class.java)
+    private val video = ControllerSlot(VideoPlayerService::class.java)
+
     suspend fun getAudioController(
         context: Context,
         file: File,
         fileName: String?,
         connectionId: String?,
-        remotePath: String?
-    ): MediaController? {
-        // Return existing controller if playing the same file
-        if (audioController != null && currentAudioFile == file.absolutePath) {
-            return audioController
-        }
-        
-        // Release old controller properly if switching files
-        if (audioController != null) {
-            try {
-                // Stop the player before releasing to prevent leaks
-                audioController?.stop()
-                audioController?.release()
-            } catch (e: Exception) {
-                // Ignore errors during cleanup
-            }
-            audioController = null
-            currentAudioFile = null
-            audioControllerFuture?.cancel(true)
-            audioControllerFuture = null
-            
-            // Give the system a moment to clean up
-            kotlinx.coroutines.delay(100)
-        }
-        
-        return try {
-            // Start service with file information
-            val serviceIntent = android.content.Intent(context, AudioPlayerService::class.java).apply {
-                putExtra("file_path", file.absolutePath)
-                putExtra("file_name", fileName)
-                putExtra("connection_id", connectionId)
-                putExtra("remote_path", remotePath)
-            }
-            context.startService(serviceIntent)
-            
-            // Create new controller
-            val sessionToken = SessionToken(context, ComponentName(context, AudioPlayerService::class.java))
-            val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-            audioControllerFuture = controllerFuture
-            val deferred = CompletableDeferred<MediaController?>()
-            
-            controllerFuture.addListener({
-                try {
-                    val controller = controllerFuture.get()
-                    audioController = controller
-                    currentAudioFile = file.absolutePath
-                    deferred.complete(controller)
-                } catch (e: Exception) {
-                    deferred.complete(null)
-                }
-            }, ContextCompat.getMainExecutor(context))
-            
-            deferred.await()
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
+        remotePath: String?,
+        streamUri: String? = null
+    ): MediaController? = audio.get(context, file, fileName, connectionId, remotePath, streamUri)
+
     suspend fun getVideoController(
         context: Context,
         file: File,
         fileName: String?,
         connectionId: String?,
-        remotePath: String?
-    ): MediaController? {
-        // Return existing controller if playing the same file
-        if (videoController != null && currentVideoFile == file.absolutePath) {
-            return videoController
-        }
-        
-        // Release old controller properly if switching files
-        if (videoController != null) {
-            try {
-                // Stop the player before releasing to prevent leaks
-                videoController?.stop()
-                videoController?.release()
-            } catch (e: Exception) {
-                // Ignore errors during cleanup
-            }
-            videoController = null
-            currentVideoFile = null
-            videoControllerFuture?.cancel(true)
-            videoControllerFuture = null
-            
-            // Give the system a moment to clean up
-            kotlinx.coroutines.delay(100)
-        }
-        
-        return try {
-            // Start service with file information
-            val serviceIntent = android.content.Intent(context, VideoPlayerService::class.java).apply {
-                putExtra("file_path", file.absolutePath)
-                putExtra("file_name", fileName)
-                putExtra("connection_id", connectionId)
-                putExtra("remote_path", remotePath)
-            }
-            context.startService(serviceIntent)
-            
-            // Create new controller
-            val sessionToken = SessionToken(context, ComponentName(context, VideoPlayerService::class.java))
-            val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
-            videoControllerFuture = controllerFuture
-            val deferred = CompletableDeferred<MediaController?>()
-            
-            controllerFuture.addListener({
-                try {
-                    val controller = controllerFuture.get()
-                    videoController = controller
-                    currentVideoFile = file.absolutePath
-                    deferred.complete(controller)
-                } catch (e: Exception) {
-                    deferred.complete(null)
-                }
-            }, ContextCompat.getMainExecutor(context))
-            
-            deferred.await()
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
-    fun getCurrentAudioFile(): String? = currentAudioFile
-    fun getCurrentVideoFile(): String? = currentVideoFile
-    
-    fun releaseAudioController() {
-        audioController?.release()
-        audioController = null
-        currentAudioFile = null
-        audioControllerFuture?.cancel(true)
-        audioControllerFuture = null
-    }
-    
-    fun releaseVideoController() {
-        videoController?.release()
-        videoController = null
-        currentVideoFile = null
-        videoControllerFuture?.cancel(true)
-        videoControllerFuture = null
-    }
-    
+        remotePath: String?,
+        streamUri: String? = null
+    ): MediaController? = video.get(context, file, fileName, connectionId, remotePath, streamUri)
+
+    fun getCurrentAudioFile(): String? = audio.currentFile
+    fun getCurrentVideoFile(): String? = video.currentFile
+
+    fun releaseAudioController() = audio.release()
+
+    fun releaseVideoController() = video.release()
+
     fun releaseAll() {
         releaseAudioController()
         releaseVideoController()
+    }
+
+    private class ControllerSlot(private val service: Class<out MediaSessionService>) {
+        private var controller: MediaController? = null
+        private var pending: ListenableFuture<MediaController>? = null
+        var currentFile: String? = null
+            private set
+
+        suspend fun get(
+            context: Context,
+            file: File,
+            fileName: String?,
+            connectionId: String?,
+            remotePath: String?,
+            streamUri: String?
+        ): MediaController? {
+            // What is playing: the grid:// stream when streaming, otherwise the local file
+            val source = streamUri ?: file.absolutePath
+            // Controllers outlive the activity that asked for them, so never hold an Activity.
+            val appContext = context.applicationContext
+
+            // (Re)start the service with the file info so the notification opens this file.
+            try {
+                appContext.startService(
+                    Intent(appContext, service).apply {
+                        if (streamUri == null) putExtra("file_path", file.absolutePath)
+                        putExtra("stream_uri", streamUri)
+                        putExtra("file_name", fileName)
+                        putExtra("connection_id", connectionId)
+                        putExtra("remote_path", remotePath)
+                    }
+                )
+            } catch (e: IllegalStateException) {
+                // Background start restrictions; the session can still be bound below.
+                Log.w(TAG, "Could not start ${service.simpleName}", e)
+            }
+
+            controller?.let { existing ->
+                if (existing.isConnected) {
+                    currentFile = source
+                    return existing
+                }
+                release()
+            }
+
+            val future = MediaController.Builder(
+                appContext,
+                SessionToken(appContext, ComponentName(appContext, service))
+            ).buildAsync()
+            pending = future
+
+            val built = suspendCancellableCoroutine { continuation ->
+                future.addListener({
+                    val result = try {
+                        future.get()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to connect to ${service.simpleName}", e)
+                        null
+                    }
+                    continuation.resume(result)
+                }, ContextCompat.getMainExecutor(appContext))
+                continuation.invokeOnCancellation { future.cancel(true) }
+            }
+            if (pending === future) pending = null
+            if (built != null) {
+                controller = built
+                currentFile = source
+            }
+            return built
+        }
+
+        fun release() {
+            pending?.cancel(true)
+            pending = null
+            controller?.release()
+            controller = null
+            currentFile = null
+        }
     }
 }

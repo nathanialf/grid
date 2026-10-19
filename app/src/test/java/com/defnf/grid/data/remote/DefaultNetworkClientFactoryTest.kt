@@ -19,7 +19,11 @@ import org.junit.Test
 class DefaultNetworkClientFactoryTest {
 
     private val factory = DefaultNetworkClientFactory(
-        sshClientProvider = SshClientProvider(mockk(relaxed = true), CoroutineScope(Dispatchers.Unconfined)),
+        sshClientProvider = SshClientProvider(
+            context = mockk(relaxed = true),
+            scope = CoroutineScope(Dispatchers.Unconfined),
+            hostKeyVerifier = mockk(relaxed = true)
+        ),
         smbClientProvider = SmbClientProvider(),
         appScope = CoroutineScope(Dispatchers.Unconfined)
     )

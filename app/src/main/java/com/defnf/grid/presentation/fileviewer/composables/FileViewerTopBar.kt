@@ -28,6 +28,8 @@ fun FileViewerTopBar(
     canExtract: Boolean = false,
     isExtracting: Boolean = false,
     extractionProgress: Float = 0f,
+    // Lets a viewer's own backdrop (e.g. the audio player's album-art gradient) show through
+    transparent: Boolean = false,
     onBack: () -> Unit,
     onEdit: () -> Unit = {},
     onSave: () -> Unit = {},
@@ -69,6 +71,14 @@ fun FileViewerTopBar(
                     textAlign = TextAlign.Center
                 )
             }
+        },
+        colors = if (transparent) {
+            TopAppBarDefaults.topAppBarColors(
+                containerColor = androidx.compose.ui.graphics.Color.Transparent,
+                scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
+            )
+        } else {
+            TopAppBarDefaults.topAppBarColors()
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
@@ -117,8 +127,7 @@ fun FileViewerTopBar(
                             WavyCircularProgressIndicator(
                                 progress = extractionProgress,
                                 modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 4f
+                                color = MaterialTheme.colorScheme.primary
                             )
                         } else {
                             Icon(

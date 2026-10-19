@@ -268,11 +268,12 @@ private fun highlightLine(
         
         while (i < line.length) {
             when {
-                // Comments
-                line.substring(i).startsWith("//") || 
-                line.substring(i).startsWith("#") ||
-                (line.substring(i).startsWith("/*") && language != ProgrammingLanguage.CSS) -> {
-                    val commentEnd = if (line.substring(i).startsWith("/*")) {
+                // Comments (startsWith with an offset avoids copying the rest of the line per char,
+                // which made long minified lines quadratic)
+                line.startsWith("//", i) ||
+                line.startsWith("#", i) ||
+                (line.startsWith("/*", i) && language != ProgrammingLanguage.CSS) -> {
+                    val commentEnd = if (line.startsWith("/*", i)) {
                         val endIndex = line.indexOf("*/", i + 2)
                         if (endIndex != -1) endIndex + 2 else line.length
                     } else line.length
@@ -292,6 +293,8 @@ private fun highlightLine(
                         stringEnd++
                     }
                     if (stringEnd < line.length) stringEnd++ // Include closing quote
+                    // A trailing backslash skips past the end of the line
+                    stringEnd = stringEnd.coerceAtMost(line.length)
                     
                     withStyle(SpanStyle(color = stringColor)) {
                         append(line.substring(i, stringEnd))

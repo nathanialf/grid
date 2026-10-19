@@ -9,6 +9,7 @@ import com.defnf.grid.domain.model.CachedFile
 import com.defnf.grid.domain.repository.ConnectionRepository
 import com.defnf.grid.domain.repository.FileRepository
 import com.defnf.grid.domain.usecase.settings.GetSettingsUseCase
+import com.defnf.grid.presentation.util.getFileType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -159,7 +160,8 @@ class CachedFilesViewModel @Inject constructor(
         }
 
         return try {
-            val fileType = getFileType(cachedFile.name)
+            // Same mapping as the browser, so unknown binaries aren't opened as text
+            val fileType = getFileType(cachedFile.name).name
 
             Intent(application, FileViewerActivity::class.java).apply {
                 putExtra("file_path", file.absolutePath)
@@ -173,28 +175,6 @@ class CachedFilesViewModel @Inject constructor(
                 error = "Failed to open file: ${e.message}"
             )
             null
-        }
-    }
-
-    private fun getFileType(fileName: String): String {
-        val extension = fileName.substringAfterLast('.', "").lowercase()
-
-        return when {
-            extension in setOf("jpg", "jpeg", "png", "bmp", "webp", "svg", "gif") -> "IMAGE"
-            extension == "pdf" -> "PDF"
-            extension == "apk" -> "APK"
-            extension in setOf("mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus") -> "AUDIO"
-            extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> "VIDEO"
-            extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> "ARCHIVE"
-            extension in setOf("epub", "mobi", "azw", "azw3", "fb2", "lit") -> "EBOOK"
-            extension in setOf("md", "markdown") -> "MARKDOWN"
-            extension in setOf(
-                "js", "ts", "jsx", "tsx", "java", "kt", "py", "cpp", "c", "h", "cs", "php",
-                "rb", "go", "rs", "swift", "css", "scss", "sass", "html", "htm", "xml",
-                "json", "yaml", "yml", "sql", "sh", "bat", "ps1", "dockerfile", "gradle",
-                "groovy", "scala", "clj", "elm", "dart", "vue", "svelte"
-            ) -> "CODE"
-            else -> "TEXT"
         }
     }
 

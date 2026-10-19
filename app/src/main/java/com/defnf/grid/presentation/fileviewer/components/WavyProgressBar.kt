@@ -2,19 +2,35 @@ package com.defnf.grid.presentation.fileviewer.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.*
 
-// Wavy progress bar component with scrubbing support
+/**
+ * Material 3 expressive style wavy seek bar.
+ *
+ * Dragging only moves the thumb locally; [onSeek] fires once when the finger lifts (or on tap), so
+ * scrubbing doesn't flood the media session with seeks and stutter the audio.
+ */
 @Composable
 fun WavyProgressBar(
     progress: Float,
@@ -23,137 +39,141 @@ fun WavyProgressBar(
     isPlaying: Boolean = true,
     color: Color = MaterialTheme.colorScheme.primary,
     backgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant,
-    strokeWidth: Float = 8.dp.value
+    strokeWidth: Dp = 4.dp
 ) {
+    val haptics = LocalHapticFeedback.current
+    val currentOnSeek by rememberUpdatedState(onSeek)
     var isDragging by remember { mutableStateOf(false) }
-    var dragProgress by remember { mutableStateOf(progress) }
-    
-    LaunchedEffect(progress) {
-        if (!isDragging) {
-            dragProgress = progress
+    var dragProgress by remember { mutableFloatStateOf(progress) }
+    // Holds the thumb where the user released it until the player reports the new position,
+    // so it doesn't jump back for a frame or two.
+    var pendingSeek by remember { mutableStateOf<Float?>(null) }
+    val currentProgress by rememberUpdatedState(progress)
+    LaunchedEffect(pendingSeek) {
+        val target = pendingSeek ?: return@LaunchedEffect
+        // Release once the player reports the new position, or after a second regardless
+        withTimeoutOrNull(1_000) {
+            snapshotFlow { currentProgress }.first { abs(it - target) < 0.01f }
+        }
+        pendingSeek = null
+    }
+    val shownProgress = when {
+        isDragging -> dragProgress
+        else -> pendingSeek ?: progress.coerceIn(0f, 1f)
+    }
+    val seekTo: (Float) -> Unit = { target ->
+        pendingSeek = target
+        currentOnSeek(target)
+    }
+
+    // The wave only travels while playing; when paused no frames are requested at all.
+    val shouldAnimate = isPlaying && !isDragging
+    var wavePhase by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(shouldAnimate) {
+        if (!shouldAnimate) return@LaunchedEffect
+        var lastFrame = withFrameNanos { it }
+        while (true) {
+            withFrameNanos { frame ->
+                val elapsed = (frame - lastFrame) / 1_000_000_000f
+                lastFrame = frame
+                wavePhase = (wavePhase + elapsed * WAVE_SPEED) % (2f * PI.toFloat())
+            }
         }
     }
-    
-    val infiniteTransition = rememberInfiniteTransition(label = "WavyProgressBarAnimation")
-    
-    // Only animate wave when playing and not dragging
-    val shouldAnimate = isPlaying && !isDragging
-    
-    val wavePhase by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = if (shouldAnimate) 2f * PI.toFloat() else 0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(if (shouldAnimate) 1500 else 1, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "WavePhase"
-    )
-    
-    // Smooth amplitude transition animation
-    val targetAmplitude = if (shouldAnimate) strokeWidth * 0.6f else 0f
-    val animatedAmplitude by animateFloatAsState(
-        targetValue = targetAmplitude,
+    val amplitudeFraction by animateFloatAsState(
+        targetValue = if (shouldAnimate) 1f else 0f,
         animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
         label = "AmplitudeTransition"
     )
-    
+    val thumbScale by animateFloatAsState(
+        targetValue = if (isDragging) 1.6f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "ThumbScale"
+    )
+
+    val wavePath = remember { Path() }
+
     Canvas(
         modifier = modifier
+            .semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(shownProgress, 0f..1f)
+                setProgress { target ->
+                    seekTo(target.coerceIn(0f, 1f))
+                    true
+                }
+            }
             .pointerInput(Unit) {
-                detectDragGestures(
+                detectHorizontalDragGestures(
                     onDragStart = { offset ->
                         isDragging = true
-                        val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                        dragProgress = newProgress
-                        onSeek(newProgress)
+                        dragProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     },
-                    onDrag = { change, _ ->
-                        val newProgress = (change.position.x / size.width).coerceIn(0f, 1f)
-                        dragProgress = newProgress
-                        onSeek(newProgress)
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        dragProgress = (change.position.x / size.width).coerceIn(0f, 1f)
                     },
                     onDragEnd = {
+                        seekTo(dragProgress)
                         isDragging = false
-                    }
+                    },
+                    onDragCancel = { isDragging = false }
                 )
             }
             .pointerInput(Unit) {
                 detectTapGestures { offset ->
-                    val newProgress = (offset.x / size.width).coerceIn(0f, 1f)
-                    dragProgress = newProgress
-                    onSeek(newProgress)
+                    seekTo((offset.x / size.width).coerceIn(0f, 1f))
                 }
             }
     ) {
-        val progressWidth = size.width * dragProgress
-        
-        // Draw unified track - wavy progress + flat remaining (same as upload progress bar)
-        drawUnifiedLinearTrack(
-            width = size.width,
-            height = size.height,
-            progressWidth = progressWidth,
-            progressColor = color,
-            trackColor = backgroundColor,
-            strokeWidth = strokeWidth,
-            wavePhase = wavePhase,
-            animatedAmplitude = animatedAmplitude
-        )
-        
-        // Draw thumb at current position
+        val stroke = strokeWidth.toPx()
+        val centerY = size.height / 2f
+        val progressX = size.width * shownProgress
+        val amplitude = WAVE_AMPLITUDE.toPx() * amplitudeFraction
+        val wavelength = WAVE_LENGTH.toPx()
+        val gap = TRACK_GAP.toPx()
+
+        // Remaining (inactive) track, separated from the active part by a small gap.
+        val inactiveStart = (progressX + gap).coerceAtMost(size.width)
+        if (inactiveStart < size.width) {
+            drawLine(
+                color = backgroundColor,
+                start = Offset(inactiveStart, centerY),
+                end = Offset(size.width, centerY),
+                strokeWidth = stroke,
+                cap = StrokeCap.Round
+            )
+        }
+
+        // Active track: one path instead of a line per pixel.
+        if (progressX > 0f) {
+            wavePath.reset()
+            wavePath.moveTo(0f, centerY + amplitude * sin(wavePhase))
+            if (amplitude > 0f) {
+                val step = 2.dp.toPx()
+                var x = step
+                while (x < progressX) {
+                    wavePath.lineTo(x, centerY + amplitude * sin(2f * PI.toFloat() * x / wavelength + wavePhase))
+                    x += step
+                }
+            }
+            wavePath.lineTo(
+                progressX,
+                centerY + amplitude * sin(2f * PI.toFloat() * progressX / wavelength + wavePhase)
+            )
+            drawPath(wavePath, color, style = Stroke(width = stroke, cap = StrokeCap.Round))
+        }
+
         drawCircle(
             color = color,
-            radius = 6.dp.toPx(),
-            center = Offset(progressWidth, size.height / 2f)
+            radius = THUMB_RADIUS.toPx() * thumbScale,
+            center = Offset(progressX, centerY)
         )
     }
 }
 
-// Same implementation as LoadingView.kt for consistency
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawUnifiedLinearTrack(
-    width: Float,
-    height: Float,
-    progressWidth: Float,
-    progressColor: Color,
-    trackColor: Color,
-    strokeWidth: Float,
-    wavePhase: Float,
-    animatedAmplitude: Float
-) {
-    val y = height / 2
-    val segments = (width / 1f).toInt().coerceAtLeast(50)
-    val stepX = width / segments
-    
-    // Use fixed wavelength in pixels for consistent appearance
-    val wavelengthInPixels = 80f
-    
-    var previousPoint: Offset? = null
-    
-    for (i in 0..segments) {
-        val x = i * stepX
-        val isInProgressSection = x <= progressWidth
-        
-        val currentY = if (isInProgressSection && animatedAmplitude > 0f) {
-            // Wavy for progress section when playing
-            val wave = sin((2f * PI * x / wavelengthInPixels + wavePhase).toFloat()) * animatedAmplitude
-            y + wave
-        } else {
-            // Flat for remaining section or when paused/dragging
-            y
-        }
-        
-        val currentPoint = Offset(x, currentY)
-        
-        previousPoint?.let { prev ->
-            val segmentColor = if (isInProgressSection) progressColor else trackColor
-            drawLine(
-                color = segmentColor,
-                start = prev,
-                end = currentPoint,
-                strokeWidth = strokeWidth,
-                cap = StrokeCap.Round
-            )
-        }
-        
-        previousPoint = currentPoint
-    }
-}
+private const val WAVE_SPEED = 4f // radians per second
+private val WAVE_AMPLITUDE = 3.dp
+private val WAVE_LENGTH = 32.dp
+private val TRACK_GAP = 4.dp
+private val THUMB_RADIUS = 6.dp

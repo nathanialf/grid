@@ -8,7 +8,6 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import org.apache.sshd.client.SshClient
-import org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,7 +30,9 @@ import javax.inject.Singleton
 @Singleton
 class SshClientProvider @Inject constructor(
     @ApplicationContext private val context: Context,
-    @ApplicationScope private val scope: CoroutineScope
+    @ApplicationScope private val scope: CoroutineScope,
+    /** Checks every session's host key; exposed so connect failures can report a changed key. */
+    val hostKeyVerifier: HostKeyVerifier
 ) {
 
     private val client: Deferred<SshClient> =
@@ -62,7 +63,9 @@ class SshClientProvider @Inject constructor(
         val sshClient = SshClient.setUpDefaultClient()
         SshAlgorithms.apply(sshClient)
         SshTuning.apply(sshClient)
-        sshClient.serverKeyVerifier = AcceptAllServerKeyVerifier.INSTANCE
+        // Trust on first use, then refuse changed keys (previously every key was accepted, letting
+        // anyone on the network impersonate the server and collect the password).
+        sshClient.serverKeyVerifier = hostKeyVerifier
         sshClient.start()
         return sshClient
     }

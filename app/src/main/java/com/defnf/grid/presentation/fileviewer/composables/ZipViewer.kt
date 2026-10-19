@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -183,6 +184,9 @@ private fun ArchiveEntryItem(
     level: Int
 ) {
     val isExpanded = expandedPaths.contains(entry.path)
+    // Observe the configuration locale (and build the formatter once per row, not per frame)
+    val locale = LocalConfiguration.current.locales[0]
+    val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, yyyy", locale) }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -247,7 +251,7 @@ private fun ArchiveEntryItem(
                             entry.lastModified?.let { date ->
                                 val prefix = if (entry.size > 0) " • " else ""
                                 Text(
-                                    text = "$prefix${SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(date)}",
+                                    text = "$prefix${dateFormat.format(date)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

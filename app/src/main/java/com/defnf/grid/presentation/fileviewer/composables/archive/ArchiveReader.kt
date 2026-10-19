@@ -148,9 +148,11 @@ class ArchiveReader {
         
         // Second pass: build the tree structure
         for (entry in flatEntries) {
-            val pathParts = entry.path.split('/')
+            // Directory entries end in '/' ("a/b/"); without trimming, "a/b/" would resolve its
+            // parent to itself and nested folders would vanish from the tree.
+            val pathParts = entry.path.trimEnd('/').split('/')
             
-            if (pathParts.size == 1 || (pathParts.size == 2 && pathParts[1].isEmpty() && entry.isDirectory)) {
+            if (pathParts.size == 1) {
                 // Root level entry
                 rootEntries.add(entry)
             } else {

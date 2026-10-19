@@ -7,6 +7,11 @@ import com.defnf.grid.data.remote.telemetry.ConnectTrace
 import com.defnf.grid.domain.model.*
 import com.defnf.grid.util.GridLog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -94,14 +99,23 @@ class SftpClient @Inject constructor(
                 // half-open session and its thread leak.
                 runCatching { openedSession?.close(true) }
                 trace.finish("timeout")
-                Result.Error(IOException("Connection timed out", e))
+                Result.Error(hostKeyChangeFor(connection) ?: IOException("Connection timed out", e))
             } catch (e: Exception) {
                 runCatching { openedSession?.close(true) }
                 trace.finish("error")
                 GridLog.w(GridLog.TAG_SFTP, "Connect failed", e)
-                Result.Error(e)
+                Result.Error(hostKeyChangeFor(connection) ?: e)
             }
         }
+
+    /**
+     * A rejected host key surfaces from sshd as a generic auth/KEX failure; report it as what it is
+     * so the UI can show the new fingerprint and offer to trust it.
+     */
+    private fun hostKeyChangeFor(connection: Connection): HostKeyChangedException? =
+        sshClientProvider.hostKeyVerifier
+            .takeMismatch(connection.hostname, connection.effectivePort)
+            ?.let { HostKeyChangedException(connection.hostname, connection.effectivePort, it) }
 
     /** Tries key auth when a key is present, falling back to password on any failure. */
     private fun authenticate(session: ClientSession, credential: Credential): Boolean {
@@ -163,19 +177,42 @@ class SftpClient @Inject constructor(
         try {
             val client = sftpClient ?: return@withContext Result.Error(Exception("Not connected"))
             
-            val files = client.readDir(path)
+            val files = client.readDir(path).filter { it.filename != "." && it.filename != ".." }
+            fun entryPath(name: String) = if (path.endsWith("/")) "$path$name" else "$path/$name"
+
+            // readDir reports a symlink itself; stat each link's target so links to folders (such as
+            // ~/media -> /mnt/media) can be browsed and linked files show their real size and date.
+            // The stats run concurrently, a few at a time, so a folder full of links costs a few
+            // round trips rather than one per link.
+            val linkGate = Semaphore(SYMLINK_STAT_CONCURRENCY)
+            val resolvedLinks = coroutineScope {
+                files.filter { it.attributes.isSymbolicLink }
+                    .map { entry ->
+                        async {
+                            val target = linkGate.withPermit {
+                                runCatching { client.stat(entryPath(entry.filename)) }.getOrNull()
+                            }
+                            entry.filename to target
+                        }
+                    }
+                    .awaitAll()
+                    .mapNotNull { (name, target) -> target?.let { name to it } }
+                    .toMap()
+            }
+
             val remoteFiles = files.map { entry ->
                 val attrs = entry.attributes
+                val target = resolvedLinks[entry.filename] ?: attrs
                 RemoteFile(
                     name = entry.filename,
-                    path = if (path.endsWith("/")) "$path${entry.filename}" else "$path/${entry.filename}",
-                    isDirectory = attrs.isDirectory,
-                    size = attrs.size,
-                    lastModified = attrs.modifyTime?.toMillis() ?: 0L,
+                    path = entryPath(entry.filename),
+                    isDirectory = target.isDirectory,
+                    size = target.size,
+                    lastModified = target.modifyTime?.toMillis() ?: 0L,
                     permissions = attrs.permissions.toString(),
                     isHidden = entry.filename.startsWith(".")
                 )
-            }.filter { it.name != "." && it.name != ".." }
+            }
             
             Result.Success(remoteFiles)
         } catch (e: Exception) {
@@ -198,8 +235,9 @@ class SftpClient @Inject constructor(
         try {
             val client = sftpClient ?: return@withContext Result.Error(Exception("Not connected"))
             
-            val attrs = client.stat(path)
-            if (attrs.isDirectory) {
+            // lstat, not stat: a symlink to a directory must be unlinked, never followed and emptied
+            val attrs = client.lstat(path)
+            if (attrs.isDirectory && !attrs.isSymbolicLink) {
                 // Recursively delete directory contents
                 deleteDirectoryRecursive(client, path)
             } else {
@@ -262,6 +300,21 @@ class SftpClient @Inject constructor(
         }
     }
     
+    override suspend fun openInputStream(remotePath: String, offset: Long): InputStream =
+        withContext(Dispatchers.IO) {
+            val client = sftpClient ?: throw IOException("Not connected")
+            // read() returns an SftpInputStreamAsync, which keeps many reads in flight; skipping
+            // before the first read only moves its starting offset, so seeking costs no transfer.
+            val stream = client.read(remotePath, SshTuning.TRANSFER_BUFFER_BYTES)
+            var remaining = offset
+            while (remaining > 0) {
+                val skipped = stream.skip(remaining)
+                if (skipped <= 0) break
+                remaining -= skipped
+            }
+            stream
+        }
+
     override suspend fun downloadFile(remotePath: String, outputStream: OutputStream): Flow<TransferProgress> = flow {
         val client = sftpClient ?: throw Exception("Not connected")
         
@@ -409,3 +462,6 @@ class SftpClient @Inject constructor(
         }
     }
 }
+
+/** How many symlink targets a directory listing stats at once on one session. */
+private const val SYMLINK_STAT_CONCURRENCY = 8

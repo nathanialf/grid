@@ -8,8 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.graphicsLayer
@@ -22,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Sort
+import com.defnf.grid.presentation.components.HostKeyChangedDialog
 import com.defnf.grid.presentation.components.FileThumbnail
 import com.defnf.grid.presentation.components.FileThumbnailFill
 import com.defnf.grid.presentation.components.hasThumbnail
@@ -64,7 +64,10 @@ fun FileBrowserScreen(
     onNavigateBack: () -> Unit,
     viewModel: FileBrowserViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val visibleFiles = remember(uiState.files, uiState.showHiddenFiles) {
+        uiState.files.filter { !it.isHidden || uiState.showHiddenFiles }
+    }
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -253,127 +256,85 @@ fun FileBrowserScreen(
             )
         },
         floatingActionButton = {
-            // Hide the floating toolbar when uploading or loading to prevent UI clutter
-            if (!uiState.isUploading && !uiState.isLoading) {
-                Card(
+            // Material 3 Expressive floating toolbar. It stays mounted while folders load (it used
+            // to pop out and back on every tap) and only slides away during an upload, whose
+            // progress card takes its place.
+            AnimatedVisibility(
+                visible = !uiState.isUploading,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut()
+            ) {
+                val selecting = uiState.isSelectionMode
+                val hasSelection = uiState.selectedFiles.isNotEmpty()
+                HorizontalFloatingToolbar(
+                    expanded = true,
                     modifier = Modifier.padding(bottom = 16.dp),
-                    shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (uiState.isSelectionMode) {
-                            // Selection mode actions
-                            // Clear selection
-                            IconButton(
-                                onClick = { viewModel.exitSelectionMode() },
-                                modifier = Modifier.size(56.dp)
-                            ) {
+                    floatingActionButton = {
+                        // Primary action: Upload, or Delete while selecting
+                        val fabColor by animateColorAsState(
+                            targetValue = when {
+                                !selecting -> MaterialTheme.colorScheme.primaryContainer
+                                hasSelection -> MaterialTheme.colorScheme.errorContainer
+                                else -> MaterialTheme.colorScheme.surfaceContainerHighest
+                            },
+                            label = "ToolbarFabColor"
+                        )
+                        FloatingToolbarDefaults.VibrantFloatingActionButton(
+                            onClick = {
+                                if (!selecting) {
+                                    filePickerLauncher.launch("*/*")
+                                } else if (hasSelection) {
+                                    viewModel.deleteSelectedFiles()
+                                }
+                            },
+                            containerColor = fabColor,
+                            contentColor = contentColorFor(fabColor)
+                        ) {
+                            AnimatedContent(targetState = selecting, label = "ToolbarFabIcon") { isSelecting ->
                                 Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear Selection",
-                                    modifier = Modifier.size(24.dp)
+                                    imageVector = if (isSelecting) Icons.Default.Delete else Icons.Default.Upload,
+                                    contentDescription = if (isSelecting) "Delete Selected" else "Upload File"
                                 )
                             }
-                            
-                            // Show rename button only when exactly 1 file is selected
-                            if (uiState.selectedFiles.size == 1) {
+                        }
+                    }
+                ) {
+                    AnimatedContent(
+                        targetState = selecting,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
+                        label = "ToolbarActions"
+                    ) { isSelecting ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isSelecting) {
+                                IconButton(onClick = { viewModel.exitSelectionMode() }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear Selection")
+                                }
+                                // Rename only applies to exactly one file
                                 IconButton(
-                                    onClick = { 
+                                    onClick = {
                                         val selectedFilePath = uiState.selectedFiles.first()
-                                        val selectedFile = uiState.files.find { it.path == selectedFilePath }
-                                        selectedFile?.let {
+                                        uiState.files.find { it.path == selectedFilePath }?.let {
                                             fileToRename = it
                                             showRenameDialog = true
                                         }
                                     },
-                                    modifier = Modifier.size(56.dp)
+                                    enabled = uiState.selectedFiles.size == 1
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "Rename",
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                                    Icon(Icons.Default.Edit, contentDescription = "Rename")
                                 }
-                            }
-                            
-                            // Download selected files
-                            IconButton(
-                                onClick = { viewModel.downloadSelectedFiles() },
-                                modifier = Modifier.size(56.dp),
-                                enabled = uiState.selectedFiles.isNotEmpty()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download Selected",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            
-                            // Delete selected files
-                            FilledIconButton(
-                                onClick = { viewModel.deleteSelectedFiles() },
-                                modifier = Modifier.size(56.dp),
-                                enabled = uiState.selectedFiles.isNotEmpty(),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    contentColor = MaterialTheme.colorScheme.onError,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete Selected",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        } else {
-                            // Normal mode actions
-                            // Select mode
-                            IconButton(
-                                onClick = { viewModel.enterSelectionMode() },
-                                modifier = Modifier.size(56.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Checklist,
-                                    contentDescription = "Select Files",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            
-                            // New Folder - Secondary action
-                            IconButton(
-                                onClick = { viewModel.createDirectory("New Folder") },
-                                modifier = Modifier.size(56.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CreateNewFolder,
-                                    contentDescription = "Create Folder",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            
-                            // Upload - Primary action (more prominent coloring)
-                            FilledIconButton(
-                                onClick = { filePickerLauncher.launch("*/*") },
-                                modifier = Modifier.size(56.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Upload,
-                                    contentDescription = "Upload File",
-                                    modifier = Modifier.size(24.dp)
-                                )
+                                IconButton(
+                                    onClick = { viewModel.downloadSelectedFiles() },
+                                    enabled = hasSelection
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = "Download Selected")
+                                }
+                            } else {
+                                IconButton(onClick = { viewModel.enterSelectionMode() }) {
+                                    Icon(Icons.Default.Checklist, contentDescription = "Select Files")
+                                }
+                                IconButton(onClick = { viewModel.createDirectory("New Folder") }) {
+                                    Icon(Icons.Default.CreateNewFolder, contentDescription = "Create Folder")
+                                }
                             }
                         }
                     }
@@ -448,10 +409,12 @@ fun FileBrowserScreen(
                         }
                         
                         items(
-                            items = uiState.files.filter { !it.isHidden || uiState.showHiddenFiles },
-                            key = { file -> file.path }
+                            items = visibleFiles,
+                            key = { file -> file.path },
+                            contentType = { file -> if (file.isDirectory) "directory" else "file" }
                         ) { file ->
                             FileGridItem(
+                                modifier = Modifier.animateItem(),
                                 file = file,
                                 thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
                                 onClick = {
@@ -509,10 +472,12 @@ fun FileBrowserScreen(
                         }
                         
                         items(
-                            items = uiState.files.filter { !it.isHidden || uiState.showHiddenFiles },
-                            key = { file -> file.path }
+                            items = visibleFiles,
+                            key = { file -> file.path },
+                            contentType = { file -> if (file.isDirectory) "directory" else "file" }
                         ) { file ->
                             FileItem(
+                                modifier = Modifier.animateItem(),
                                 file = file,
                                 thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
                                 onClick = {
@@ -663,6 +628,14 @@ fun FileBrowserScreen(
         )
     }
     
+    uiState.hostKeyChange?.let { change ->
+        HostKeyChangedDialog(
+            change = change,
+            onTrust = { viewModel.trustChangedHostKey() },
+            onDismiss = { viewModel.dismissHostKeyChange() }
+        )
+    }
+
     // Delete confirmation dialog
     if (uiState.showDeleteConfirmation) {
         val selectedCount = uiState.selectedFiles.size
@@ -843,6 +816,7 @@ private fun ParentDirectoryItem(
 private fun FileItem(
     file: RemoteFile,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
@@ -854,37 +828,41 @@ private fun FileItem(
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
     val hapticFeedback = LocalHapticFeedback.current
     
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = if (isSelected) {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
         } else {
-            CardDefaults.cardColors()
-        }
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        label = "FileItemContainer"
+    )
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .pointerInput(isSelectionMode) {
-                    detectTapGestures(
-                        onTap = {
-                            if (isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSelectionToggle()
-                            } else {
-                                onClick()
-                            }
-                        },
-                        onLongPress = {
-                            if (!isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onLongPress()
-                            }
+                // combinedClickable always calls the latest lambdas (a pointerInput keyed only on
+                // selection mode kept stale ones, so tapping a downloading file started a second
+                // download instead of cancelling), and adds ripple + TalkBack actions.
+                .combinedClickable(
+                    onClick = {
+                        if (isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSelectionToggle()
+                        } else {
+                            onClick()
                         }
-                    )
-                }
+                    },
+                    onLongClickLabel = "Select",
+                    onLongClick = {
+                        if (!isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLongPress()
+                        }
+                    }
+                )
         ) {
             Row(
                 modifier = Modifier
@@ -914,8 +892,7 @@ private fun FileItem(
                 WavyCircularProgressIndicator(
                     progress = downloadProgress,
                     modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 4f
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(16.dp))
             } else if (showEdgeThumbnail && !isSelectionMode) {
@@ -1036,23 +1013,33 @@ private fun handleFileOpen(
     
     val fileType = getFileType(file.name)
     
+    fun viewerIntent() = Intent(context, com.defnf.grid.presentation.fileviewer.FileViewerActivity::class.java).apply {
+        putExtra("file_name", file.name)
+        putExtra("file_type", fileType.name)
+        putExtra("connection_id", connectionId)
+        putExtra("remote_path", file.path)
+    }
+
     when (fileType) {
-        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO, FileType.VIDEO, FileType.ARCHIVE, FileType.EBOOK, FileType.APK -> {
+        // Media streams from the server, so playback starts without waiting for a download
+        FileType.AUDIO, FileType.VIDEO -> {
+            viewModel.openMedia(
+                file = file,
+                onLocalFile = { cached ->
+                    fileViewerLauncher.launch(viewerIntent().putExtra("file_path", cached.absolutePath))
+                },
+                onStream = { uri ->
+                    fileViewerLauncher.launch(viewerIntent().putExtra("stream_uri", uri))
+                }
+            )
+        }
+        // UNKNOWN opens in the viewer too, which offers to hand the file to another app.
+        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF,
+        FileType.ARCHIVE, FileType.EBOOK, FileType.APK, FileType.UNKNOWN -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
-                val intent = Intent(context, com.defnf.grid.presentation.fileviewer.FileViewerActivity::class.java).apply {
-                    putExtra("file_path", tempFile.absolutePath)
-                    putExtra("file_name", file.name)
-                    putExtra("file_type", fileType.name)
-                    putExtra("connection_id", connectionId)
-                    putExtra("remote_path", file.path)
-                }
-                fileViewerLauncher.launch(intent)
+                fileViewerLauncher.launch(viewerIntent().putExtra("file_path", tempFile.absolutePath))
             }
-        }
-        FileType.UNKNOWN -> {
-            // Fallback to download for unknown types
-            viewModel.downloadFile(file, "/tmp/${file.name}")
         }
     }
 }
@@ -1096,6 +1083,7 @@ private fun ParentDirectoryGridItem(
 private fun FileGridItem(
     file: RemoteFile,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
     onSelectionToggle: () -> Unit = {},
@@ -1105,39 +1093,43 @@ private fun FileGridItem(
     thumbnailFile: File? = null
 ) {
     val hapticFeedback = LocalHapticFeedback.current
+    val containerColor by animateColorAsState(
+        targetValue = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        },
+        label = "FileGridItemContainer"
+    )
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1.5f),
-        colors = if (isSelected) {
-            CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
-        } else {
-            CardDefaults.cardColors()
-        }
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(isSelectionMode) {
-                    detectTapGestures(
-                        onTap = {
-                            if (isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onSelectionToggle()
-                            } else {
-                                onClick()
-                            }
-                        },
-                        onLongPress = {
-                            if (!isSelectionMode) {
-                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                onLongPress()
-                            }
+                // combinedClickable always calls the latest lambdas (a pointerInput keyed only on
+                // selection mode kept stale ones, so tapping a downloading file started a second
+                // download instead of cancelling), and adds ripple + TalkBack actions.
+                .combinedClickable(
+                    onClick = {
+                        if (isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onSelectionToggle()
+                        } else {
+                            onClick()
                         }
-                    )
-                }
+                    },
+                    onLongClickLabel = "Select",
+                    onLongClick = {
+                        if (!isSelectionMode) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onLongPress()
+                        }
+                    }
+                )
         ) {
             // When a real thumbnail is cached, let it fill the whole card and lay the name over a
             // gradient scrim so it stays legible against the image.
@@ -1190,8 +1182,7 @@ private fun FileGridItem(
                     WavyCircularProgressIndicator(
                         progress = downloadProgress,
                         modifier = Modifier.size(32.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 5f
+                        color = MaterialTheme.colorScheme.primary
                     )
                 } else {
                     FileThumbnail(

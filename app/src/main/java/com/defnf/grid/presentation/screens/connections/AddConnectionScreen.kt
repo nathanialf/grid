@@ -2,6 +2,7 @@
 
 package com.defnf.grid.presentation.screens.connections
 
+import android.content.ClipData
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -15,6 +16,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -22,6 +25,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.launch
+import com.defnf.grid.presentation.components.HostKeyChangedDialog
 import com.defnf.grid.domain.model.Protocol
 import com.defnf.grid.presentation.theme.GridTheme
 import com.defnf.grid.presentation.components.WavyCircularProgressIndicator
@@ -40,6 +45,14 @@ fun AddConnectionScreen(
         }
     }
     
+    uiState.hostKeyChange?.let { change ->
+        HostKeyChangedDialog(
+            change = change,
+            onTrust = viewModel::trustChangedHostKey,
+            onDismiss = viewModel::dismissHostKeyChange
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -113,6 +126,14 @@ fun EditConnectionScreen(
         }
     }
     
+    uiState.hostKeyChange?.let { change ->
+        HostKeyChangedDialog(
+            change = change,
+            onTrust = viewModel::trustChangedHostKey,
+            onDismiss = viewModel::dismissHostKeyChange
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -502,7 +523,8 @@ private fun SshKeySection(
     onUseGeneratedKey: () -> Unit,
     onClearKey: () -> Unit
 ) {
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var showPublicKey by remember { mutableStateOf(false) }
 
     Card {
@@ -611,7 +633,11 @@ private fun SshKeySection(
                                 )
                                 IconButton(
                                     onClick = {
-                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(generatedPublicKey))
+                                        scope.launch {
+                                            clipboard.setClipEntry(
+                                                ClipData.newPlainText("SSH public key", generatedPublicKey).toClipEntry()
+                                            )
+                                        }
                                     }
                                 ) {
                                     Icon(

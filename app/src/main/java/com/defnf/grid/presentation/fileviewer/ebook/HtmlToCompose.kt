@@ -49,7 +49,7 @@ object HtmlToCompose {
         }
         
         val doc = Jsoup.parse(html)
-        val body = doc.body() ?: doc
+        val body = doc.body()
         val images = mutableListOf<ImageInfo>()
         
         Log.d(TAG, "Parsed HTML document - body element: ${body.tagName()}, child count: ${body.childNodeSize()}")
@@ -97,8 +97,10 @@ object HtmlToCompose {
         for (child in element.childNodes()) {
             when (child) {
                 is TextNode -> {
+                    // Keep whitespace-only nodes: they are the spaces between inline elements
+                    // (<em>foo</em> <b>bar</b>); dropping them ran words together.
                     val text = child.text()
-                    if (text.isNotBlank()) {
+                    if (text.isNotEmpty()) {
                         builder.append(text)
                     }
                 }

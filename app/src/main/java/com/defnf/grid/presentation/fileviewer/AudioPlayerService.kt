@@ -11,13 +11,16 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.C
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.ui.PlayerNotificationManager
 import com.defnf.grid.R
 import com.defnf.grid.presentation.MainActivity
+import com.defnf.grid.data.media.GridMediaDataSourceFactory
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @OptIn(UnstableApi::class)
 @AndroidEntryPoint
@@ -27,6 +30,10 @@ class AudioPlayerService : MediaSessionService() {
     private var currentFileName: String? = null
     private var currentConnectionId: String? = null
     private var currentRemotePath: String? = null
+    private var currentStreamUri: String? = null
+
+    @Inject
+    lateinit var dataSourceFactory: GridMediaDataSourceFactory
 
     override fun onCreate() {
         super.onCreate()
@@ -44,6 +51,8 @@ class AudioPlayerService : MediaSessionService() {
                 false // Don't gate playback on audio focus, so media plays during phone calls
             )
             .setHandleAudioBecomingNoisy(true)
+            // Plays grid:// URIs straight from the server as well as cached local files
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory.create(this)))
             .build()
 
         // Create MediaSession with proper notification setup
@@ -76,9 +85,10 @@ class AudioPlayerService : MediaSessionService() {
             currentFileName = it.getStringExtra("file_name")
             currentConnectionId = it.getStringExtra("connection_id")
             currentRemotePath = it.getStringExtra("remote_path")
+            currentStreamUri = it.getStringExtra("stream_uri")
             
             // Update session activity with current file info
-            if (currentFilePath != null) {
+            if (currentFilePath != null || currentStreamUri != null) {
                 mediaSession?.setSessionActivity(createFileSessionActivityPendingIntent())
             }
         }
@@ -122,6 +132,7 @@ class AudioPlayerService : MediaSessionService() {
             putExtra("file_type", "AUDIO")
             putExtra("connection_id", currentConnectionId)
             putExtra("remote_path", currentRemotePath)
+            putExtra("stream_uri", currentStreamUri)
             putExtra("from_notification", true) // Flag to indicate this came from notification
         }
         return PendingIntent.getActivity(

@@ -25,13 +25,21 @@ import com.defnf.grid.domain.usecase.file.RenameDirUseCase
 import com.defnf.grid.domain.usecase.file.UploadFileUseCase
 import com.defnf.grid.domain.usecase.settings.GetSettingsUseCase
 import com.defnf.grid.domain.repository.FileRepository
+import com.defnf.grid.data.media.RemoteMediaUri
+import com.defnf.grid.data.remote.ssh.HostKeyVerifier
+import com.defnf.grid.di.IoDispatcher
+import com.defnf.grid.domain.model.HostKeyChangedException
+import com.defnf.grid.domain.model.findHostKeyChange
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -48,6 +56,8 @@ class FileBrowserViewModel @Inject constructor(
     private val renameDirUseCase: RenameDirUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val fileRepository: FileRepository,
+    private val hostKeyVerifier: HostKeyVerifier,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -61,6 +71,7 @@ class FileBrowserViewModel @Inject constructor(
 
     private var currentConnection: Connection? = null
     private val downloadJobs = mutableMapOf<String, Job>()
+    private var loadJob: Job? = null
     private var currentUploadTransferId: String? = null
     private var currentUploadJob: Job? = null
     private var currentUploadRemotePath: String? = null
@@ -113,7 +124,13 @@ class FileBrowserViewModel @Inject constructor(
 
     fun navigateToDirectory(path: String) {
         savedStateHandle[KEY_CURRENT_PATH] = path
-        _uiState.value = _uiState.value.copy(currentPath = path)
+        // A selection only makes sense in the folder it was made in; carrying it over would let
+        // Delete act on files that are no longer on screen.
+        _uiState.value = _uiState.value.copy(
+            currentPath = path,
+            isSelectionMode = false,
+            selectedFiles = emptySet()
+        )
         loadFiles(path)
     }
 
@@ -121,10 +138,25 @@ class FileBrowserViewModel @Inject constructor(
         loadFiles(_uiState.value.currentPath)
     }
 
+    /** The user accepted the server's new host key; remember it and reconnect. */
+    fun trustChangedHostKey() {
+        val change = _uiState.value.hostKeyChange ?: return
+        hostKeyVerifier.trust(change.host, change.port, change.fingerprint)
+        _uiState.value = _uiState.value.copy(hostKeyChange = null, error = null)
+        refresh()
+    }
+
+    fun dismissHostKeyChange() {
+        _uiState.value = _uiState.value.copy(hostKeyChange = null)
+    }
+
     private fun loadFiles(path: String) {
         val connection = currentConnection ?: return
 
-        viewModelScope.launch {
+        // Only the latest listing may update the screen; otherwise quickly tapping into a folder
+        // and back can show one folder's contents under another's path.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
@@ -136,9 +168,11 @@ class FileBrowserViewModel @Inject constructor(
                     error = null
                 )
             } catch (exception: Exception) {
+                if (exception is kotlinx.coroutines.CancellationException) throw exception
                 _uiState.value = _uiState.value.copy(
                     files = emptyList(),
                     isLoading = false,
+                    hostKeyChange = exception.findHostKeyChange(),
                     error = exception.message ?: "Failed to load files"
                 )
             }
@@ -171,59 +205,73 @@ class FileBrowserViewModel @Inject constructor(
     fun openFile(file: RemoteFile, onFileReady: (File) -> Unit) {
         val connection = currentConnection ?: return
 
+        // A second tap on a file that is still downloading cancels it rather than starting a
+        // parallel download into the same cache file.
+        if (downloadJobs[file.path]?.isActive == true) {
+            cancelDownload(file.path)
+            return
+        }
+
         val job = viewModelScope.launch {
+            val tempFile = cacheFileFor(connection, file)
+            val tempDir = tempFile.parentFile ?: application.cacheDir
+            // Download next to the cache entry and swap it in only once complete, so a cancelled
+            // or failed transfer never leaves a truncated file that looks like a valid cache hit.
+            // Unique per attempt: a cancelled download may still be writing (and then deleting) its
+            // part file while a re-tap's new download has already started.
+            val partFile = File(tempDir, "${tempFile.name}.${java.util.UUID.randomUUID()}.part")
             try {
-                // Create temporary file in cache directory
-                val tempDir = File(application.cacheDir, "opened_files")
-                if (!tempDir.exists()) {
+                val cached = withContext(ioDispatcher) {
                     tempDir.mkdirs()
+                    tempFile.exists() && isCacheValid(tempFile, file)
                 }
-                
-                // Create cache filename that includes connection and path info to avoid conflicts
-                // Replace both forward and backward slashes to handle both SFTP and SMB paths
-                val cacheFileName = "${connection.id}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
-                val tempFile = File(tempDir, cacheFileName)
-                
-                // Check if file is already cached and valid
-                if (tempFile.exists() && isCacheValid(tempFile, file)) {
-                    // File is cached and valid, use it directly
+                if (cached) {
                     onFileReady(tempFile)
                     return@launch
                 }
-                
-                // File not cached or invalid, download it
+
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles + file.path,
                     downloadProgress = _uiState.value.downloadProgress + (file.path to 0f)
                 )
-                
-                // Download file to temp location with progress tracking
-                downloadFileWithProgressUseCase(connection, file, tempFile.absolutePath)
+
+                // Progress arrives per transfer buffer; only publish whole-percent changes so a
+                // large file doesn't recompose the browser thousands of times.
+                var lastPercent = -1
+                downloadFileWithProgressUseCase(connection, file, partFile.absolutePath)
                     .collect { transfer ->
                         val progress = if (transfer.progress.totalBytes > 0) {
                             transfer.progress.bytesTransferred.toFloat() / transfer.progress.totalBytes.toFloat()
                         } else {
                             0f
                         }
-                        
-                        _uiState.value = _uiState.value.copy(
-                            downloadProgress = _uiState.value.downloadProgress + (file.path to progress)
-                        )
-                        
-                        if (transfer.state == com.defnf.grid.domain.model.TransferState.COMPLETED) {
-                            downloadJobs.remove(file.path)
+                        val percent = (progress * 100).toInt()
+                        if (percent != lastPercent) {
+                            lastPercent = percent
                             _uiState.value = _uiState.value.copy(
-                                downloadingFiles = _uiState.value.downloadingFiles - file.path,
-                                downloadProgress = _uiState.value.downloadProgress - file.path
+                                downloadProgress = _uiState.value.downloadProgress + (file.path to progress)
                             )
-                            
-                            // Callback with the downloaded file on main thread
-                            onFileReady(tempFile)
                         }
                     }
-                
+
+                // The flow completes once the file is fully written and closed (this also covers
+                // empty files, which never report a COMPLETED progress tick).
+                withContext(ioDispatcher) {
+                    tempFile.delete()
+                    if (!partFile.renameTo(tempFile)) {
+                        throw java.io.IOException("Couldn't save ${file.name} to the cache")
+                    }
+                }
+                _uiState.value = _uiState.value.copy(
+                    downloadingFiles = _uiState.value.downloadingFiles - file.path,
+                    downloadProgress = _uiState.value.downloadProgress - file.path
+                )
+                onFileReady(tempFile)
             } catch (exception: Exception) {
-                downloadJobs.remove(file.path)
+                withContext(NonCancellable + ioDispatcher) { partFile.delete() }
+                // A newer download of the same file owns the progress state now; leave it alone.
+                val owner = downloadJobs[file.path]
+                if (owner != null && owner !== coroutineContext[Job]) return@launch
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles - file.path,
                     downloadProgress = _uiState.value.downloadProgress - file.path,
@@ -233,12 +281,44 @@ class FileBrowserViewModel @Inject constructor(
                         "Failed to open ${file.name}: ${exception.message}"
                     }
                 )
+            } finally {
+                if (downloadJobs[file.path] === coroutineContext[Job]) {
+                    downloadJobs.remove(file.path)
+                }
             }
         }
-        
+
         // Store the job so it can be cancelled
-        downloadJobs[file.path] = job
+        if (job.isActive) {
+            downloadJobs[file.path] = job
+        }
     }
+
+    /**
+     * Audio and video play straight from the server instead of downloading first; a valid cached
+     * copy is still preferred since it needs no network at all.
+     */
+    fun openMedia(file: RemoteFile, onLocalFile: (File) -> Unit, onStream: (String) -> Unit) {
+        val connection = currentConnection ?: return
+        viewModelScope.launch {
+            val cached = cacheFileFor(connection, file)
+            val useCache = withContext(ioDispatcher) { cached.exists() && isCacheValid(cached, file) }
+            if (useCache) {
+                onLocalFile(cached)
+            } else {
+                onStream(RemoteMediaUri.build(connection.id, file.path, file.name, file.size).toString())
+            }
+        }
+    }
+
+    /**
+     * Where an opened file is cached. The name includes connection and path to avoid conflicts,
+     * with both forward and backward slashes replaced to handle SFTP and SMB paths.
+     */
+    private fun cacheFileFor(connection: Connection, file: RemoteFile): File = File(
+        File(application.cacheDir, "opened_files"),
+        "${connection.id}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
+    )
 
     fun cancelDownload(filePath: String) {
         downloadJobs[filePath]?.cancel()
@@ -316,16 +396,17 @@ class FileBrowserViewModel @Inject constructor(
 
                     var tempFile: File? = null
                     try {
-                        val fileName = resolveDisplayName(uri)
+                        // ContentResolver queries and the local copy are disk I/O; keep them off
+                        // the main thread so large files don't freeze the UI.
+                        val fileName = withContext(ioDispatcher) { resolveDisplayName(uri) }
                         val remotePath = if (currentPath.endsWith("/")) {
                             "$currentPath$fileName"
                         } else {
                             "$currentPath/$fileName"
                         }
-                        currentUploadRemotePath = remotePath
                         _uiState.value = _uiState.value.copy(uploadFileName = fileName)
 
-                        tempFile = createTempFileFromUri(uri, fileName)
+                        tempFile = withContext(ioDispatcher) { createTempFileFromUri(uri, fileName) }
                             ?: throw Exception("Failed to read file from URI")
 
                         // Use the UploadFileUseCase with progress tracking
@@ -335,9 +416,20 @@ class FileBrowserViewModel @Inject constructor(
                                     currentUploadTransferId = fileTransfer.id
                                 }
                                 if (fileTransfer.id != currentUploadTransferId) return@collect
+                                // The repository's first emission precedes opening the remote file, so
+                                // only once bytes have been written is there a partial file of ours
+                                // that cancel may clean up; before that the path may be someone's
+                                // existing file.
+                                if (fileTransfer.state == TransferState.IN_PROGRESS &&
+                                    fileTransfer.progress.bytesTransferred > 0
+                                ) {
+                                    currentUploadRemotePath = remotePath
+                                }
 
                                 when (fileTransfer.state) {
                                     TransferState.COMPLETED -> {
+                                        // Finished files must never be deleted by a later cancel.
+                                        currentUploadRemotePath = null
                                         _uiState.value = _uiState.value.copy(uploadProgress = 1f)
                                     }
                                     TransferState.FAILED -> {
@@ -626,11 +718,6 @@ class FileBrowserViewModel @Inject constructor(
                     downloadDir.mkdirs()
                 }
                 
-                // Log the download path for debugging
-                println("Grid: Downloading files to: ${downloadDir.absolutePath}")
-                println("Grid: Download directory exists: ${downloadDir.exists()}")
-                println("Grid: Download directory writable: ${downloadDir.canWrite()}")
-                
                 selectedFiles.forEach { file ->
                     try {
                         if (file.isDirectory) {
@@ -648,14 +735,11 @@ class FileBrowserViewModel @Inject constructor(
                                 counter++
                             }
                             
-                            println("Grid: Attempting to download ${file.name} to ${finalLocalFile.absolutePath}")
-                            println("Grid: Parent directory exists: ${finalLocalFile.parentFile?.exists()}")
-                            println("Grid: Parent directory writable: ${finalLocalFile.parentFile?.canWrite()}")
-                            
                             // Ensure parent directory exists
                             finalLocalFile.parentFile?.mkdirs()
                             
-                            // Download with progress tracking
+                            // Download with progress tracking, publishing only whole-percent changes
+                            var lastPercent = -1
                             downloadFileWithProgressUseCase(connection, file, finalLocalFile.absolutePath)
                                 .collect { transfer ->
                                     val progress = if (transfer.progress.totalBytes > 0) {
@@ -663,27 +747,25 @@ class FileBrowserViewModel @Inject constructor(
                                     } else {
                                         0f
                                     }
-                                    
-                                    _uiState.value = _uiState.value.copy(
-                                        downloadProgress = _uiState.value.downloadProgress + (file.path to progress)
-                                    )
-                                    
-                                    if (transfer.state == com.defnf.grid.domain.model.TransferState.COMPLETED) {
+                                    val percent = (progress * 100).toInt()
+                                    if (percent != lastPercent) {
+                                        lastPercent = percent
                                         _uiState.value = _uiState.value.copy(
-                                            downloadingFiles = _uiState.value.downloadingFiles - file.path,
-                                            downloadProgress = _uiState.value.downloadProgress - file.path
+                                            downloadProgress = _uiState.value.downloadProgress + (file.path to progress)
                                         )
                                     }
                                 }
-                            
-                            println("Grid: Download completed. File exists: ${finalLocalFile.exists()}, size: ${finalLocalFile.length()}")
-                            println("Grid: File readable: ${finalLocalFile.canRead()}")
+                            // Flow completion means the file is written (empty files never report
+                            // a COMPLETED tick, so don't wait for one).
+                            _uiState.value = _uiState.value.copy(
+                                downloadingFiles = _uiState.value.downloadingFiles - file.path,
+                                downloadProgress = _uiState.value.downloadProgress - file.path
+                            )
                             
                             downloadedCount++
                         }
                     } catch (exception: Exception) {
-                        println("Grid: Failed to download ${file.name}: ${exception.message}")
-                        exception.printStackTrace()
+                        if (exception is kotlinx.coroutines.CancellationException) throw exception
                         failedCount++
                         
                         // Remove failed download from progress tracking
@@ -735,7 +817,9 @@ class FileBrowserViewModel @Inject constructor(
     
     fun confirmDeleteSelectedFiles() {
         val connection = currentConnection ?: return
-        val selectedFiles = _uiState.value.selectedFiles
+        // Only ever delete what is actually listed in the current folder.
+        val visiblePaths = _uiState.value.files.mapTo(HashSet()) { it.path }
+        val selectedFiles = _uiState.value.selectedFiles.filter { it in visiblePaths }
         
         if (selectedFiles.isEmpty()) return
         
@@ -895,6 +979,8 @@ data class FileBrowserUiState(
     val isSelectionMode: Boolean = false,
     val selectedFiles: Set<String> = emptySet(),
     val showDeleteConfirmation: Boolean = false,
+    // Set when the SFTP server's host key no longer matches the trusted one
+    val hostKeyChange: HostKeyChangedException? = null,
     val error: String? = null,
     val message: String? = null
 )

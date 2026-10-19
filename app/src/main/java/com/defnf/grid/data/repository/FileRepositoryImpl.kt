@@ -234,7 +234,8 @@ class FileRepositoryImpl @Inject constructor(
 
         return cacheDir.listFiles()?.mapNotNull { file ->
             // Filename format from FileBrowserViewModel: {connectionId}_{encodedPath}_{filename}
-            if (file.isFile && file.name.startsWith("${connectionId}_")) {
+            // .part files are downloads still in progress (or interrupted), not cached files
+            if (file.isFile && file.name.startsWith("${connectionId}_") && !file.name.endsWith(".part")) {
                 val withoutConnectionId = file.name.removePrefix("${connectionId}_")
                 // The format is: encodedPath_filename where encodedPath has / and \ replaced with _
                 // We need to find the original filename - it's after the last segment

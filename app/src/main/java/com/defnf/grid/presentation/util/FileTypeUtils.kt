@@ -40,16 +40,18 @@ fun getFileType(fileName: String): FileType {
         extension in setOf("mp4", "avi", "mkv", "mov", "wmv", "flv", "webm", "m4v", "3gp", "ts", "mts") -> FileType.VIDEO
         extension in setOf("zip", "rar", "7z", "tar", "gz", "tgz", "bz2", "xz", "lz", "lzma") -> FileType.ARCHIVE
         extension in setOf("epub", "mobi", "azw", "azw3", "fb2", "lit") -> FileType.EBOOK
-        extension in setOf("md", "markdown") -> FileType.MARKDOWN
+        extension in setOf("md", "markdown", "mdown", "mkd", "mkdn") -> FileType.MARKDOWN
         extension in setOf(
             "js", "ts", "jsx", "tsx", "java", "kt", "py", "cpp", "c", "h", "cs", "php",
             "rb", "go", "rs", "swift", "css", "scss", "sass", "html", "htm", "xml",
             "json", "yaml", "yml", "sql", "sh", "bat", "ps1", "dockerfile", "gradle",
-            "groovy", "scala", "clj", "elm", "dart", "vue", "svelte"
+            "groovy", "scala", "clj", "elm", "dart", "vue", "svelte",
+            "kts", "lua", "pl", "hpp", "cc", "cxx", "mjs", "cjs", "proto", "graphql", "tf"
         ) -> FileType.CODE
         extension in setOf(
-            "txt", "properties", "ini", "cfg", "conf", "log", "csv", "toml",
-            "gitignore", "makefile", "readme", "license", "changelog"
+            "txt", "text", "properties", "ini", "cfg", "conf", "log", "csv", "tsv", "toml",
+            "gitignore", "makefile", "readme", "license", "changelog",
+            "srt", "vtt", "nfo", "env", "rst", "patch", "diff", "m3u", "tex"
         ) -> FileType.TEXT
         extension.isEmpty() || extension == fileName.lowercase() -> FileType.TEXT
         // Unknown extensions (.iso, .docx, .exe...) are usually binary; reading them into the text

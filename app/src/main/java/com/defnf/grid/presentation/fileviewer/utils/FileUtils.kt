@@ -1,5 +1,7 @@
 package com.defnf.grid.presentation.fileviewer.utils
 
+import com.defnf.grid.presentation.util.FileType
+import com.defnf.grid.presentation.util.getFileType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -44,21 +46,7 @@ object FileUtils {
      * @param file The file to check
      * @return true if the file can be edited
      */
-    fun isEditableFile(file: File): Boolean {
-        val extension = file.extension.lowercase()
-        return extension in setOf(
-            // Text files
-            "txt", "text", "log", "csv", "tsv",
-            // Code files
-            "js", "ts", "jsx", "tsx", "java", "kt", "py", "cpp", "c", "h", "cs", "php", 
-            "rb", "go", "rs", "swift", "css", "scss", "sass", "html", "htm", "xml", 
-            "json", "yaml", "yml", "sql", "sh", "bat", "ps1", "dockerfile", "gradle",
-            "groovy", "scala", "clj", "elm", "dart", "vue", "svelte",
-            // Markdown files
-            "md", "markdown", "mdown", "mkd",
-            // Config files
-            "properties", "ini", "cfg", "conf", "toml",
-            "gitignore", "makefile", "readme", "license", "changelog"
-        )
-    }
+    fun isEditableFile(file: File): Boolean =
+        // Same mapping the browser uses to pick a viewer, so the two never disagree
+        getFileType(file.name) in setOf(FileType.TEXT, FileType.CODE, FileType.MARKDOWN)
 }

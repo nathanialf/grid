@@ -71,6 +71,8 @@ class FileViewerActivity : ComponentActivity() {
     }
 }
 
+private val EDITABLE_TYPES = setOf("TEXT", "CODE", "MARKDOWN")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileViewerScreen(
@@ -169,7 +171,8 @@ fun FileViewerScreen(
                     FileViewerTopBar(
                         fileName = fileName,
                         fileType = fileType,
-                        canEdit = FileUtils.isEditableFile(file),
+                        // Only these routes have an editor (streams have no local file at all)
+                        canEdit = fileType in EDITABLE_TYPES && FileUtils.isEditableFile(File(fileName)),
                         isEditMode = uiState.isEditMode,
                         canSave = editorActions?.hasUnsavedChanges == true,
                         isSaving = editorActions?.isSaving == true,

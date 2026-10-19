@@ -38,8 +38,10 @@ class ArchiveExtractor {
      */
     private fun safeOutputFile(outputDirectory: File, entryName: String): File {
         val file = File(outputDirectory, entryName)
-        val root = outputDirectory.canonicalPath + File.separator
-        if (!file.canonicalPath.startsWith(root)) {
+        val root = outputDirectory.canonicalPath
+        val target = file.canonicalPath
+        // The root itself is allowed: `tar -czf x.tgz .` writes a "./" entry
+        if (target != root && !target.startsWith(root + File.separator)) {
             throw IOException("Blocked archive entry outside the extraction folder: $entryName")
         }
         return file

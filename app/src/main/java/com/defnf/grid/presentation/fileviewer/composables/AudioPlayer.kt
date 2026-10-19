@@ -80,9 +80,12 @@ fun AudioPlayer(
         try {
             // Connect to the playback service while the tags and cover are being read.
             val controllerJob = async {
-                MediaControllerManager.getAudioController(
-                    context, file, fileName, connectionId, remotePath, streamUri
-                )
+                // Failures must surface as null here, not cancel the whole effect
+                runCatching {
+                    MediaControllerManager.getAudioController(
+                        context, file, fileName, connectionId, remotePath, streamUri
+                    )
+                }.getOrNull()
             }
             val loaded = if (streamUri == null) {
                 extractAudioMetadata(file)
@@ -232,6 +235,8 @@ private fun NowPlaying(
             .padding(horizontal = 24.dp, vertical = 16.dp)
     ) {
         val landscape = maxWidth > maxHeight
+        // Read the constraints here: inside Row/Column the BoxWithConstraints scope isn't implicit
+        val artSize = if (landscape) minOf(maxHeight, maxWidth * 0.45f) else minOf(maxWidth, maxHeight * 0.5f)
         if (landscape) {
             Row(
                 modifier = Modifier.fillMaxSize(),
@@ -241,7 +246,7 @@ private fun NowPlaying(
                 AlbumArt(
                     metadata = metadata,
                     isPlaying = playback.isPlaying,
-                    size = minOf(maxHeight, maxWidth * 0.45f)
+                    size = artSize
                 )
                 Column(
                     modifier = Modifier.weight(1f),
@@ -265,7 +270,7 @@ private fun NowPlaying(
                     AlbumArt(
                         metadata = metadata,
                         isPlaying = playback.isPlaying,
-                        size = minOf(maxWidth, maxHeight * 0.5f)
+                        size = artSize
                     )
                 }
                 Spacer(Modifier.height(24.dp))

@@ -21,7 +21,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.*
 
 /**
@@ -47,12 +48,14 @@ fun WavyProgressBar(
     // Holds the thumb where the user released it until the player reports the new position,
     // so it doesn't jump back for a frame or two.
     var pendingSeek by remember { mutableStateOf<Float?>(null) }
-    LaunchedEffect(progress, pendingSeek) {
+    val currentProgress by rememberUpdatedState(progress)
+    LaunchedEffect(pendingSeek) {
         val target = pendingSeek ?: return@LaunchedEffect
-        if (abs(progress - target) < 0.01f) pendingSeek = null else {
-            delay(1_000)
-            pendingSeek = null
+        // Release once the player reports the new position, or after a second regardless
+        withTimeoutOrNull(1_000) {
+            snapshotFlow { currentProgress }.first { abs(it - target) < 0.01f }
         }
+        pendingSeek = null
     }
     val shownProgress = when {
         isDragging -> dragProgress

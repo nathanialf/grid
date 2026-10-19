@@ -177,18 +177,19 @@ class SftpClient @Inject constructor(
                 val attrs = entry.attributes
                 val entryPath = if (path.endsWith("/")) "$path${entry.filename}" else "$path/${entry.filename}"
                 // readDir reports the link itself; resolve symlinks (one extra round trip each) so
-                // links to folders such as ~/media -> /mnt/media can be browsed.
-                val isDirectory = if (attrs.isSymbolicLink) {
-                    runCatching { client.stat(entryPath).isDirectory }.getOrDefault(false)
+                // links to folders such as ~/media -> /mnt/media can be browsed, and linked files
+                // show their real size and date.
+                val target = if (attrs.isSymbolicLink) {
+                    runCatching { client.stat(entryPath) }.getOrNull() ?: attrs
                 } else {
-                    attrs.isDirectory
+                    attrs
                 }
                 RemoteFile(
                     name = entry.filename,
                     path = entryPath,
-                    isDirectory = isDirectory,
-                    size = attrs.size,
-                    lastModified = attrs.modifyTime?.toMillis() ?: 0L,
+                    isDirectory = target.isDirectory,
+                    size = target.size,
+                    lastModified = target.modifyTime?.toMillis() ?: 0L,
                     permissions = attrs.permissions.toString(),
                     isHidden = entry.filename.startsWith(".")
                 )

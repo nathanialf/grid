@@ -1,6 +1,7 @@
 package com.defnf.grid.data.remote.ssh
 
 import android.content.Context
+import androidx.core.content.edit
 import com.defnf.grid.util.GridLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.apache.sshd.client.keyverifier.ServerKeyVerifier
@@ -51,7 +52,7 @@ class HostKeyVerifier @Inject constructor(
         return when (known) {
             null -> {
                 GridLog.d(TAG) { "Trusting first-seen host key for $hostId: $fingerprint" }
-                prefs.edit().putString(hostId, fingerprint).apply()
+                prefs.edit { putString(hostId, fingerprint) }
                 true
             }
             fingerprint -> true
@@ -68,7 +69,7 @@ class HostKeyVerifier @Inject constructor(
 
     /** Records [fingerprint] as the trusted key for this server, replacing any previous one. */
     fun trust(host: String, port: Int, fingerprint: String) {
-        prefs.edit().putString(hostId(host, port), fingerprint).apply()
+        prefs.edit { putString(hostId(host, port), fingerprint) }
     }
 
     /** The trusted fingerprint for this server, or null if Grid hasn't connected to it yet. */

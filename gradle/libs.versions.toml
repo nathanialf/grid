@@ -1,19 +1,20 @@
 [versions]
-agp = "8.13.0"
-kotlin = "1.9.25"
+agp = "9.4.1"
+kotlin = "2.3.21"
 desugarJdkLibs = "2.1.5"
-ksp = "1.9.25-1.0.20"
-composeCompiler = "1.5.15"
+ksp = "2.3.12"
 coreKtx = "1.15.0"
 lifecycleRuntimeKtx = "2.8.7"
 activityCompose = "1.10.0"
-composeBom = "2024.12.01"
+composeBom = "2026.09.00"
+# Material 3 Expressive APIs ship only in 1.5 (1.4.0 stable removed them); requires compileSdk 37 / AGP 9.1+
+material3 = "1.5.0-beta01"
 composeNavigation = "2.8.4"
-hilt = "2.54"
+hilt = "2.60.1"
 hiltNavigation = "1.2.0"
 datastore = "1.1.1"
 biometric = "1.1.0"
-kotlinxSerialization = "1.6.3"
+kotlinxSerialization = "1.11.0"
 workManager = "2.10.0"
 coil = "2.7.0"
 media3 = "1.4.1"
@@ -38,7 +39,7 @@ androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "material3" }
 androidx-material3-window-size = { group = "androidx.compose.material3", name = "material3-window-size-class" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "composeNavigation" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
@@ -79,11 +80,9 @@ mina-sshd-client = { group = "org.apache.sshd", name = "sshd-sftp", version = "2
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
-kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.8.1" }
-# Pinned to the last releases built against Kotlin 1.9; newer versions (MockK 1.14.x,
-# Turbine 1.2.x) ship Kotlin 2.x metadata that the project's 1.9.25 KSP compiler can't read.
-mockk = { group = "io.mockk", name = "mockk", version = "1.13.13" }
-turbine = { group = "app.cash.turbine", name = "turbine", version = "1.1.0" }
+kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version = "1.11.0" }
+mockk = { group = "io.mockk", name = "mockk", version = "1.14.11" }
+turbine = { group = "app.cash.turbine", name = "turbine", version = "1.2.1" }
 
 # UI extras
 androidx-palette-ktx = { group = "androidx.palette", name = "palette-ktx", version = "1.0.0" }
@@ -99,7 +98,8 @@ jsoup = { group = "org.jsoup", name = "jsoup", version = "1.22.2" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+# AGP 9 compiles Kotlin itself ("built-in Kotlin"); only the compiler plugins are applied
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

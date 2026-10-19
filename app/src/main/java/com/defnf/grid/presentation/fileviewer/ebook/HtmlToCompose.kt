@@ -49,7 +49,7 @@ object HtmlToCompose {
         }
         
         val doc = Jsoup.parse(html)
-        val body = doc.body() ?: doc
+        val body = doc.body()
         val images = mutableListOf<ImageInfo>()
         
         Log.d(TAG, "Parsed HTML document - body element: ${body.tagName()}, child count: ${body.childNodeSize()}")

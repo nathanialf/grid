@@ -29,7 +29,7 @@ and verifies the release signature with `apksigner`. Artifacts land under
 ## Zero tolerance for warnings (enforced)
 
 Per project policy, **any warning fails the build** — they must be fixed, never ignored:
-- `app/build.gradle.kts` → `kotlinOptions { allWarningsAsErrors = true }` (Kotlin compiler).
+- `app/build.gradle.kts` → `kotlin { compilerOptions { allWarningsAsErrors = true } }` (Kotlin compiler).
 - `app/build.gradle.kts` → `lint { warningsAsErrors = true; abortOnError = true; checkReleaseBuilds = true }`.
 - The driver also greps build output for stray `w:` lines as a backstop.
 - **Excluded by design** (documented in the `lint {}` block): the informational
@@ -41,14 +41,14 @@ Per project policy, **any warning fails the build** — they must be fixed, neve
 
 ## Prerequisites (one-time, already done on this box)
 
-JDK 17 and the Gradle 8.13 wrapper are present. The Android SDK lives at `~/Android/Sdk`.
+JDK 17+ (21 works) and the Gradle 9.6.1 wrapper (AGP 9.4 needs Gradle ≥ 9.6) are present. The Android SDK lives at `~/Android/Sdk`.
 If recreating it on a clean machine:
 
 ```bash
 # command-line tools → ~/Android/Sdk/cmdline-tools/latest/
 export ANDROID_HOME="$HOME/Android/Sdk"
 yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses
-"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "build-tools;35.0.0"
 ```
 
 Then point Gradle at it (gitignored, machine-specific):
@@ -95,9 +95,17 @@ Turbine, coroutines-test) are configured for when tests are added.
 - **Media3 opt-in uses `androidx.annotation.OptIn`, positionally.** Annotate with
   `@OptIn(UnstableApi::class)` — NOT `@OptIn(markerClass = UnstableApi::class)`; the
   named single-element vararg form is a Kotlin compile error.
-- **Hilt/Dagger ≥ 2.59 requires AGP 9.** Stay on Hilt 2.54–2.5x while on AGP 8.13. Hilt
-  2.53 emits 16 spurious KSP "No dependencies reported" warnings (Dagger #4526); 2.54 fixes
-  them — do not downgrade below 2.54 or the zero-tolerance gate breaks.
+- **Toolchain is coupled: AGP 9.4 · Gradle 9.6 · Kotlin 2.3 (built-in) · KSP 2.3 · Hilt 2.60.**
+  Material 3 Expressive lives only in material3 1.5 (1.4.0 stable removed it), which with
+  Compose 1.12 requires compileSdk 37 and AGP ≥ 9.1 (see each AAR's aar-metadata.properties).
+  AGP 9 compiles Kotlin itself: never apply `org.jetbrains.kotlin.android`; KGP is pinned via the
+  root buildscript classpath. Keep Dagger's `kotlin-metadata-jvm` ≥ the Kotlin version (2.60.1
+  ships 2.3.21). `-Xannotation-default-target=param-property` silences Kotlin 2.2+'s
+  constructor-property annotation warnings (Hilt qualifiers) under `allWarningsAsErrors`.
+- **No `gradlew` script is committed** (gitignored). Run the wrapper directly:
+  `java -cp gradle/wrapper/gradle-wrapper.jar org.gradle.wrapper.GradleWrapperMain <tasks>`.
+- **Maven Central rate-limits (HTTP 429)** cold dependency resolution in cloud sessions; retry
+  with a backoff.
 - **`commons-compress` ≥ 1.26 deprecates `SevenZFile(File)`.** Use
   `SevenZFile.builder().setFile(f).get()` — the old constructor trips `allWarningsAsErrors`.
 - **First build is slow (~7 min), incremental ~1 min.** The Gradle daemon, build cache,

@@ -82,10 +82,10 @@ app/src/main/java/com/grid/app/
 ```
 
 ### Key Technologies
-- **Kotlin** 1.9.25 with Coroutines for asynchronous programming
-- **Android Gradle Plugin** 8.13.0 with Gradle 8.13
-- **Jetpack Compose** with Material 3 components
-- **Hilt** 2.53 for dependency injection
+- **Kotlin** 2.3 (AGP built-in Kotlin) with Coroutines for asynchronous programming
+- **Android Gradle Plugin** 9.4 with Gradle 9.6 (compileSdk 37, targetSdk 36)
+- **Jetpack Compose** 1.12 with Material 3 Expressive (material3 1.5)
+- **Hilt** 2.60 for dependency injection
 - **DataStore** for preferences storage
 - **Android Keystore** for credential encryption
 

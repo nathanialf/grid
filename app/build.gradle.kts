@@ -3,7 +3,7 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.hilt.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
@@ -26,7 +26,8 @@ val appVersionName = "1.2.0"
 
 android {
     namespace = "com.defnf.grid"
-    compileSdk = 36
+    // 37 is required by Compose 1.12 / Material 3 1.5 (targetSdk stays at the Play-required level)
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.defnf.grid"
@@ -74,7 +75,7 @@ android {
 
     lint {
         // Zero tolerance: every lint warning is promoted to an error and fails the build,
-        // on both debug and release. Combined with kotlinOptions.allWarningsAsErrors, nothing
+        // on both debug and release. Combined with compilerOptions.allWarningsAsErrors, nothing
         // warning-level can slip through.
         warningsAsErrors = true
         abortOnError = true
@@ -87,8 +88,8 @@ android {
         disable += "TrustAllX509TrustManager"
         // The following are informational "a newer version is available" advisories. They are
         // not defects, they re-fire every time any dependency publishes a release, and clearing
-        // them requires major-version migrations (AGP 9, Kotlin 2.x) that can't
-        // be runtime-verified in CI. Dependencies are reviewed/bumped out-of-band instead, so
+        // them can require major-version migrations that need runtime verification.
+        // Dependencies are reviewed/bumped out-of-band instead, so
         // these are excluded from the zero-tolerance gate to keep it stable and meaningful.
         disable += "NewerVersionAvailable"
         disable += "GradleDependency"
@@ -96,12 +97,6 @@ android {
         disable += "OldTargetApi"
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-        // Zero tolerance for warnings: any Kotlin compiler warning fails the build.
-        allWarningsAsErrors = true
-    }
-    
     buildFeatures {
         compose = true
         buildConfig = true
@@ -116,10 +111,6 @@ android {
         }
     }
     
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.15"
-    }
-    
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -129,6 +120,17 @@ android {
             excludes += "/META-INF/NOTICE"
             excludes += "/META-INF/NOTICE.txt"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        // Zero tolerance for warnings: any Kotlin compiler warning fails the build.
+        // (jvmTarget follows android.compileOptions.targetCompatibility with built-in Kotlin.)
+        allWarningsAsErrors = true
+        // Kotlin 2.2+ default: an annotation on a constructor property (e.g. Hilt's
+        // @ApplicationContext) applies to the parameter and the property/field.
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 
@@ -222,12 +224,6 @@ dependencies {
     
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
-}
-
-// KSP Configuration for Hilt
-ksp {
-    arg("dagger.formatGeneratedSource", "disabled")
-    arg("dagger.fastInit", "enabled")
 }
 
 

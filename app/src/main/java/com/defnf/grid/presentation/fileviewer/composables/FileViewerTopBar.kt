@@ -73,12 +73,12 @@ fun FileViewerTopBar(
             }
         },
         colors = if (transparent) {
-            TopAppBarDefaults.centerAlignedTopAppBarColors(
+            TopAppBarDefaults.topAppBarColors(
                 containerColor = androidx.compose.ui.graphics.Color.Transparent,
                 scrolledContainerColor = androidx.compose.ui.graphics.Color.Transparent
             )
         } else {
-            TopAppBarDefaults.centerAlignedTopAppBarColors()
+            TopAppBarDefaults.topAppBarColors()
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
@@ -127,8 +127,7 @@ fun FileViewerTopBar(
                             WavyCircularProgressIndicator(
                                 progress = extractionProgress,
                                 modifier = Modifier.size(24.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 4f
+                                color = MaterialTheme.colorScheme.primary
                             )
                         } else {
                             Icon(

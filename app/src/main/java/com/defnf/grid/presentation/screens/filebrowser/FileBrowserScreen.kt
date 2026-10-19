@@ -256,127 +256,85 @@ fun FileBrowserScreen(
             )
         },
         floatingActionButton = {
-            // Hide the floating toolbar when uploading or loading to prevent UI clutter
-            if (!uiState.isUploading && !uiState.isLoading) {
-                Card(
+            // Material 3 Expressive floating toolbar. It stays mounted while folders load (it used
+            // to pop out and back on every tap) and only slides away during an upload, whose
+            // progress card takes its place.
+            AnimatedVisibility(
+                visible = !uiState.isUploading,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut()
+            ) {
+                val selecting = uiState.isSelectionMode
+                val hasSelection = uiState.selectedFiles.isNotEmpty()
+                HorizontalFloatingToolbar(
+                    expanded = true,
                     modifier = Modifier.padding(bottom = 16.dp),
-                    shape = RoundedCornerShape(32.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.95f)
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        if (uiState.isSelectionMode) {
-                            // Selection mode actions
-                            // Clear selection
-                            IconButton(
-                                onClick = { viewModel.exitSelectionMode() },
-                                modifier = Modifier.size(56.dp)
-                            ) {
+                    floatingActionButton = {
+                        // Primary action: Upload, or Delete while selecting
+                        val fabColor by animateColorAsState(
+                            targetValue = when {
+                                !selecting -> MaterialTheme.colorScheme.primaryContainer
+                                hasSelection -> MaterialTheme.colorScheme.errorContainer
+                                else -> MaterialTheme.colorScheme.surfaceContainerHighest
+                            },
+                            label = "ToolbarFabColor"
+                        )
+                        FloatingToolbarDefaults.VibrantFloatingActionButton(
+                            onClick = {
+                                if (!selecting) {
+                                    filePickerLauncher.launch("*/*")
+                                } else if (hasSelection) {
+                                    viewModel.deleteSelectedFiles()
+                                }
+                            },
+                            containerColor = fabColor,
+                            contentColor = contentColorFor(fabColor)
+                        ) {
+                            AnimatedContent(targetState = selecting, label = "ToolbarFabIcon") { isSelecting ->
                                 Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Clear Selection",
-                                    modifier = Modifier.size(24.dp)
+                                    imageVector = if (isSelecting) Icons.Default.Delete else Icons.Default.Upload,
+                                    contentDescription = if (isSelecting) "Delete Selected" else "Upload File"
                                 )
                             }
-                            
-                            // Show rename button only when exactly 1 file is selected
-                            if (uiState.selectedFiles.size == 1) {
+                        }
+                    }
+                ) {
+                    AnimatedContent(
+                        targetState = selecting,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() using SizeTransform(clip = false) },
+                        label = "ToolbarActions"
+                    ) { isSelecting ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (isSelecting) {
+                                IconButton(onClick = { viewModel.exitSelectionMode() }) {
+                                    Icon(Icons.Default.Clear, contentDescription = "Clear Selection")
+                                }
+                                // Rename only applies to exactly one file
                                 IconButton(
-                                    onClick = { 
+                                    onClick = {
                                         val selectedFilePath = uiState.selectedFiles.first()
-                                        val selectedFile = uiState.files.find { it.path == selectedFilePath }
-                                        selectedFile?.let {
+                                        uiState.files.find { it.path == selectedFilePath }?.let {
                                             fileToRename = it
                                             showRenameDialog = true
                                         }
                                     },
-                                    modifier = Modifier.size(56.dp)
+                                    enabled = uiState.selectedFiles.size == 1
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "Rename",
-                                        modifier = Modifier.size(24.dp)
-                                    )
+                                    Icon(Icons.Default.Edit, contentDescription = "Rename")
                                 }
-                            }
-                            
-                            // Download selected files
-                            IconButton(
-                                onClick = { viewModel.downloadSelectedFiles() },
-                                modifier = Modifier.size(56.dp),
-                                enabled = uiState.selectedFiles.isNotEmpty()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Download,
-                                    contentDescription = "Download Selected",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            
-                            // Delete selected files
-                            FilledIconButton(
-                                onClick = { viewModel.deleteSelectedFiles() },
-                                modifier = Modifier.size(56.dp),
-                                enabled = uiState.selectedFiles.isNotEmpty(),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    contentColor = MaterialTheme.colorScheme.onError,
-                                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete Selected",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        } else {
-                            // Normal mode actions
-                            // Select mode
-                            IconButton(
-                                onClick = { viewModel.enterSelectionMode() },
-                                modifier = Modifier.size(56.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Checklist,
-                                    contentDescription = "Select Files",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            
-                            // New Folder - Secondary action
-                            IconButton(
-                                onClick = { viewModel.createDirectory("New Folder") },
-                                modifier = Modifier.size(56.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CreateNewFolder,
-                                    contentDescription = "Create Folder",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            
-                            // Upload - Primary action (more prominent coloring)
-                            FilledIconButton(
-                                onClick = { filePickerLauncher.launch("*/*") },
-                                modifier = Modifier.size(56.dp),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary,
-                                    contentColor = MaterialTheme.colorScheme.onPrimary
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Upload,
-                                    contentDescription = "Upload File",
-                                    modifier = Modifier.size(24.dp)
-                                )
+                                IconButton(
+                                    onClick = { viewModel.downloadSelectedFiles() },
+                                    enabled = hasSelection
+                                ) {
+                                    Icon(Icons.Default.Download, contentDescription = "Download Selected")
+                                }
+                            } else {
+                                IconButton(onClick = { viewModel.enterSelectionMode() }) {
+                                    Icon(Icons.Default.Checklist, contentDescription = "Select Files")
+                                }
+                                IconButton(onClick = { viewModel.createDirectory("New Folder") }) {
+                                    Icon(Icons.Default.CreateNewFolder, contentDescription = "Create Folder")
+                                }
                             }
                         }
                     }
@@ -934,8 +892,7 @@ private fun FileItem(
                 WavyCircularProgressIndicator(
                     progress = downloadProgress,
                     modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 4f
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(modifier = Modifier.width(16.dp))
             } else if (showEdgeThumbnail && !isSelectionMode) {
@@ -1225,8 +1182,7 @@ private fun FileGridItem(
                     WavyCircularProgressIndicator(
                         progress = downloadProgress,
                         modifier = Modifier.size(32.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        strokeWidth = 5f
+                        color = MaterialTheme.colorScheme.primary
                     )
                 } else {
                     FileThumbnail(

@@ -123,8 +123,9 @@ class FileBrowserViewModelTest {
 
         val state = viewModel.uiState.value
         assertFalse(state.isUploading)
-        assertTrue(state.message!!.contains("Uploaded 1 files"))
-        assertTrue(state.message!!.contains("failed to upload 1 files"))
+        val message = state.message!!
+        assertTrue(message.contains("Uploaded 1 files"))
+        assertTrue(message.contains("failed to upload 1 files"))
         coVerify(exactly = 2) { uploadFileUseCase.uploadWithProgress(any(), any(), any()) }
     }
 

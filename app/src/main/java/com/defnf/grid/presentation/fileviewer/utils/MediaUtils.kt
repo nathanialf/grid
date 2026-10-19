@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.util.Log
+import androidx.media3.common.MediaMetadata
 import com.defnf.grid.presentation.fileviewer.models.AudioMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -49,6 +50,20 @@ suspend fun extractAudioMetadata(file: File): AudioMetadata = withContext(Dispat
     } finally {
         retriever.release()
     }
+}
+
+// Builds metadata from what the player parsed out of a streamed file (ID3/Vorbis/MP4 tags + cover).
+suspend fun audioMetadataFrom(metadata: MediaMetadata): AudioMetadata = withContext(Dispatchers.Default) {
+    fun text(value: CharSequence?) = value?.toString()?.takeIf { it.isNotBlank() }
+    val albumArt = metadata.artworkData?.let(::decodeAlbumArt)
+    AudioMetadata(
+        title = text(metadata.title),
+        artist = text(metadata.artist) ?: text(metadata.albumArtist),
+        album = text(metadata.albumTitle),
+        year = (metadata.recordingYear ?: metadata.releaseYear)?.toString(),
+        albumArt = albumArt,
+        seedColor = albumArt?.let(::extractSeedColor)
+    )
 }
 
 private fun decodeAlbumArt(bytes: ByteArray): Bitmap? {

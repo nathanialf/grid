@@ -14,6 +14,7 @@ fun FileContentRouter(
     fileName: String? = null,
     connectionId: String? = null,
     remotePath: String? = null,
+    streamUri: String? = null,
     onEditorActionsChanged: (TextEditorActions) -> Unit = {},
     onArchiveActionsChanged: (ArchiveViewerActions) -> Unit = {},
     onThemeSeedChanged: (Color?) -> Unit = {},
@@ -92,6 +93,7 @@ fun FileContentRouter(
                 fileName = fileName,
                 connectionId = connectionId,
                 remotePath = remotePath,
+                streamUri = streamUri,
                 modifier = modifier,
                 onThemeSeedChanged = onThemeSeedChanged
             )
@@ -103,6 +105,7 @@ fun FileContentRouter(
                 fileName = fileName,
                 connectionId = connectionId,
                 remotePath = remotePath,
+                streamUri = streamUri,
                 modifier = modifier
             )
         }

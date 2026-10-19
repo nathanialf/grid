@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -297,6 +298,32 @@ class SmbClient @Inject constructor(
         }
     }
     
+    override suspend fun openInputStream(remotePath: String, offset: Long): InputStream =
+        withContext(Dispatchers.IO) {
+            val share = diskShare ?: throw IOException("Not connected")
+            val file = share.openFile(
+                remotePath,
+                EnumSet.of(AccessMask.GENERIC_READ),
+                null,
+                SMB2ShareAccess.ALL,
+                SMB2CreateDisposition.FILE_OPEN,
+                null
+            )
+            // smbj's stream reads one request ahead; skipping before the first read only moves
+            // its starting offset. Its close() doesn't close the file handle, so do that here.
+            val stream = file.inputStream
+            if (offset > 0) stream.skip(offset)
+            object : FilterInputStream(stream) {
+                override fun close() {
+                    try {
+                        super.close()
+                    } finally {
+                        file.close()
+                    }
+                }
+            }
+        }
+
     override suspend fun downloadFile(remotePath: String, outputStream: OutputStream): Flow<TransferProgress> = flow {
         val share = diskShare ?: throw Exception("Not connected")
         

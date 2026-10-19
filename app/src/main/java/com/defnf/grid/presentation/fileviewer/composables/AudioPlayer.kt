@@ -40,6 +40,7 @@ import androidx.media3.session.MediaController
 import com.defnf.grid.presentation.fileviewer.MediaControllerManager
 import com.defnf.grid.presentation.fileviewer.components.WavyProgressBar
 import com.defnf.grid.presentation.fileviewer.models.AudioMetadata
+import com.defnf.grid.presentation.fileviewer.utils.audioMetadataFrom
 import com.defnf.grid.presentation.fileviewer.utils.extractAudioMetadata
 import com.defnf.grid.presentation.fileviewer.utils.formatTime
 import kotlinx.coroutines.async
@@ -62,6 +63,7 @@ fun AudioPlayer(
     fileName: String? = null,
     connectionId: String? = null,
     remotePath: String? = null,
+    streamUri: String? = null,
     onThemeSeedChanged: (Color?) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -70,15 +72,24 @@ fun AudioPlayer(
     var metadata by remember { mutableStateOf<AudioMetadata?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var retryKey by remember { mutableIntStateOf(0) }
+    // Streams play straight from the server; otherwise play the downloaded copy
+    val mediaUri = streamUri ?: file.toURI().toString()
 
-    LaunchedEffect(file.absolutePath, retryKey) {
+    LaunchedEffect(mediaUri, retryKey) {
         error = null
         try {
             // Connect to the playback service while the tags and cover are being read.
             val controllerJob = async {
-                MediaControllerManager.getAudioController(context, file, fileName, connectionId, remotePath)
+                MediaControllerManager.getAudioController(
+                    context, file, fileName, connectionId, remotePath, streamUri
+                )
             }
-            val loaded = extractAudioMetadata(file)
+            val loaded = if (streamUri == null) {
+                extractAudioMetadata(file)
+            } else {
+                // Show the player right away; tags and cover arrive once playback starts parsing
+                AudioMetadata()
+            }
             metadata = loaded
             currentOnThemeSeedChanged(loaded.seedColor)
 
@@ -88,15 +99,21 @@ fun AudioPlayer(
                 return@LaunchedEffect
             }
             // Only set media if this is a new controller or different file
-            if (controller.currentMediaItem?.localConfiguration?.uri?.toString() != file.toURI().toString()) {
-                val mediaMetadata = MediaMetadata.Builder()
-                    .setTitle(loaded.title ?: file.nameWithoutExtension)
-                    .setArtist(loaded.artist ?: "Unknown Artist")
-                    .setAlbumTitle(loaded.album ?: "Unknown Album")
-                    .build()
+            if (controller.currentMediaItem?.localConfiguration?.uri?.toString() != mediaUri) {
+                // For streams leave the tags unset: values set here would override the ones the
+                // player reads from the file itself.
+                val mediaMetadata = if (streamUri == null) {
+                    MediaMetadata.Builder()
+                        .setTitle(loaded.title ?: file.nameWithoutExtension)
+                        .setArtist(loaded.artist ?: "Unknown Artist")
+                        .setAlbumTitle(loaded.album ?: "Unknown Album")
+                        .build()
+                } else {
+                    MediaMetadata.EMPTY
+                }
                 controller.setMediaItem(
                     MediaItem.Builder()
-                        .setUri(file.toURI().toString())
+                        .setUri(mediaUri)
                         .setMediaMetadata(mediaMetadata)
                         .build()
                 )
@@ -111,6 +128,16 @@ fun AudioPlayer(
     }
 
     val playback = rememberPlaybackState(mediaController)
+
+    if (streamUri != null) {
+        val parsed = playback.mediaMetadata
+        LaunchedEffect(parsed) {
+            if (parsed == null || parsed == MediaMetadata.EMPTY) return@LaunchedEffect
+            val fromStream = audioMetadataFrom(parsed)
+            metadata = fromStream
+            currentOnThemeSeedChanged(fromStream.seedColor)
+        }
+    }
 
     AnimatedContent(
         targetState = when {
@@ -146,8 +173,13 @@ private enum class AudioScreenState { Loading, Error, Ready }
 @Stable
 private class PlaybackState {
     var isPlaying by mutableStateOf(false)
+    // Whether playback is wanted; stays true while a stream buffers, unlike isPlaying
+    var playWhenReady by mutableStateOf(false)
+    var isBuffering by mutableStateOf(false)
     var durationMs by mutableLongStateOf(0L)
     var positionMs by mutableLongStateOf(0L)
+    var mediaMetadata by mutableStateOf<MediaMetadata?>(null)
+    var errorMessage by mutableStateOf<String?>(null)
 }
 
 @Composable
@@ -159,8 +191,12 @@ private fun rememberPlaybackState(controller: MediaController?): PlaybackState {
         if (controller == null) return@DisposableEffect onDispose { }
         fun sync(player: Player) {
             state.isPlaying = player.isPlaying
+            state.playWhenReady = player.playWhenReady
+            state.isBuffering = player.playbackState == Player.STATE_BUFFERING
             state.durationMs = player.duration.coerceAtLeast(0L)
             state.positionMs = player.currentPosition
+            state.mediaMetadata = player.mediaMetadata
+            state.errorMessage = player.playerError?.let { "Playback failed: ${it.errorCodeName}" }
         }
         val listener = object : Player.Listener {
             override fun onEvents(player: Player, events: Player.Events) = sync(player)
@@ -388,22 +424,37 @@ private fun Controls(controller: MediaController?, playback: PlaybackState) {
                 animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow),
                 label = "PlayButtonCorner"
             )
-            FilledIconButton(
-                onClick = {
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                    controller?.let { player ->
-                        if (player.isPlaying) player.pause() else player.play()
+            Box(contentAlignment = Alignment.Center) {
+                FilledIconButton(
+                    onClick = {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        controller?.let { player ->
+                            if (player.playWhenReady) player.pause() else player.play()
+                        }
+                    },
+                    enabled = enabled,
+                    shape = RoundedCornerShape(corner),
+                    modifier = Modifier.size(88.dp)
+                ) {
+                    Crossfade(targetState = playback.playWhenReady, label = "PlayPauseIcon") { playing ->
+                        Icon(
+                            imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (playing) "Pause" else "Play",
+                            modifier = Modifier.size(40.dp)
+                        )
                     }
-                },
-                enabled = enabled,
-                shape = RoundedCornerShape(corner),
-                modifier = Modifier.size(88.dp)
-            ) {
-                Crossfade(targetState = playback.isPlaying, label = "PlayPauseIcon") { playing ->
-                    Icon(
-                        imageVector = if (playing) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (playing) "Pause" else "Play",
-                        modifier = Modifier.size(40.dp)
+                }
+                // Streams can stall on a slow link; show that rather than a frozen button
+                val bufferingAlpha by animateFloatAsState(
+                    targetValue = if (playback.isBuffering) 1f else 0f,
+                    label = "BufferingAlpha"
+                )
+                if (bufferingAlpha > 0f) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .graphicsLayer { alpha = bufferingAlpha },
+                        strokeWidth = 3.dp
                     )
                 }
             }
@@ -421,6 +472,18 @@ private fun Controls(controller: MediaController?, playback: PlaybackState) {
                 modifier = Modifier.size(56.dp)
             ) {
                 Icon(Icons.Default.Forward10, contentDescription = "Forward 10 seconds")
+            }
+        }
+
+        playback.errorMessage?.let { message ->
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error
+                )
+                TextButton(onClick = { controller?.prepare() }) { Text("Retry") }
             }
         }
     }

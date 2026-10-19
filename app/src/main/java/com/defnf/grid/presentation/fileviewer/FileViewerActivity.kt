@@ -34,7 +34,9 @@ class FileViewerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val filePath = intent.getStringExtra("file_path") ?: return finish()
+        // Media can be streamed from the server (grid:// URI) instead of opened from a local copy
+        val streamUri = intent.getStringExtra("stream_uri")
+        val filePath = intent.getStringExtra("file_path") ?: if (streamUri != null) "" else return finish()
         val fileName = intent.getStringExtra("file_name") ?: "Unknown File"
         val fileType = intent.getStringExtra("file_type") ?: "UNKNOWN"
         val connectionId = intent.getStringExtra("connection_id")
@@ -49,6 +51,7 @@ class FileViewerActivity : ComponentActivity() {
                         fileType = fileType,
                         connectionId = connectionId,
                         remotePath = remotePath,
+                        streamUri = streamUri,
                         viewModel = viewModel,
                         onBack = { finish() }
                     )
@@ -76,6 +79,7 @@ fun FileViewerScreen(
     fileType: String,
     connectionId: String?,
     remotePath: String?,
+    streamUri: String?,
     viewModel: FileViewerViewModel,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -200,6 +204,7 @@ fun FileViewerScreen(
                     fileName = fileName,
                     connectionId = connectionId,
                     remotePath = remotePath,
+                    streamUri = streamUri,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(innerPadding),

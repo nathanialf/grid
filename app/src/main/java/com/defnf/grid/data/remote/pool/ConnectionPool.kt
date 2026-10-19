@@ -27,7 +27,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import java.io.FilterInputStream
 import java.io.IOException
+import java.io.InputStream
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -184,6 +186,93 @@ class ConnectionPool @VisibleForTesting internal constructor(
         block: suspend FlowCollector<T>.(NetworkClient) -> Unit
     ): Flow<T> = flow {
         withClient(connection, retryOnStale = false) { client -> block(client) }
+    }
+
+    /**
+     * Opens a long-lived stream (media playback) on a pooled session.
+     *
+     * The session stays leased, and one of its concurrency permits held, until the returned stream
+     * is closed, so the reaper can't close it mid-playback. A stale *reused* session is reconnected
+     * and the open retried once; opening for read changes nothing on the server.
+     */
+    suspend fun openStream(
+        connection: Connection,
+        opener: suspend (NetworkClient) -> InputStream
+    ): InputStream {
+        val credential = credentialRepository.getCredentialById(connection.credentialId)
+        val key = poolKeyOf(connection, credential)
+
+        var attempt = 0
+        while (true) {
+            val lease = acquire(key, connection, credential)
+            var permitHeld = false
+            try {
+                lease.entry.gate.acquire()
+                permitHeld = true
+                val stream = opener(lease.entry.client)
+                return LeasedInputStream(stream, lease)
+            } catch (e: CancellationException) {
+                if (permitHeld) lease.entry.gate.release()
+                release(lease)
+                throw e
+            } catch (e: Throwable) {
+                if (permitHeld) lease.entry.gate.release()
+                val connectionFault = ConnectionFaults.isConnectionFault(e)
+                if (connectionFault) lease.entry.invalid = true
+                release(lease)
+                if (attempt == 0 && lease.wasReused && connectionFault) {
+                    GridLog.d(TAG) { "Reconnecting stale session for stream: $key" }
+                    attempt++
+                    continue
+                }
+                throw e
+            }
+        }
+    }
+
+    /** Returns its lease to the pool when closed, and flags the session if reading hit a dead link. */
+    private inner class LeasedInputStream(
+        stream: InputStream,
+        private val lease: Lease
+    ) : FilterInputStream(stream) {
+        private val closed = AtomicBoolean(false)
+
+        override fun read(): Int = try {
+            super.read()
+        } catch (e: IOException) {
+            throw flagIfDead(e)
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int = try {
+            super.read(b, off, len)
+        } catch (e: IOException) {
+            throw flagIfDead(e)
+        }
+
+        override fun skip(n: Long): Long = try {
+            super.skip(n)
+        } catch (e: IOException) {
+            throw flagIfDead(e)
+        }
+
+        private fun flagIfDead(e: IOException): IOException {
+            if (ConnectionFaults.isConnectionFault(e)) lease.entry.invalid = true
+            return e
+        }
+
+        override fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            try {
+                super.close()
+            } catch (e: IOException) {
+                flagIfDead(e)
+                GridLog.w(TAG, "Closing stream failed", e)
+            } finally {
+                lease.entry.gate.release()
+                // close() is called from player loader threads; hand the bookkeeping to the pool's scope.
+                scope.launch { release(lease) }
+            }
+        }
     }
 
     /**

@@ -22,6 +22,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.defnf.grid.presentation.components.HostKeyChangedDialog
 import com.defnf.grid.domain.model.Protocol
 import com.defnf.grid.presentation.theme.GridTheme
 import com.defnf.grid.presentation.components.WavyCircularProgressIndicator
@@ -40,6 +41,14 @@ fun AddConnectionScreen(
         }
     }
     
+    uiState.hostKeyChange?.let { change ->
+        HostKeyChangedDialog(
+            change = change,
+            onTrust = viewModel::trustChangedHostKey,
+            onDismiss = viewModel::dismissHostKeyChange
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -113,6 +122,14 @@ fun EditConnectionScreen(
         }
     }
     
+    uiState.hostKeyChange?.let { change ->
+        HostKeyChangedDialog(
+            change = change,
+            onTrust = viewModel::trustChangedHostKey,
+            onDismiss = viewModel::dismissHostKeyChange
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

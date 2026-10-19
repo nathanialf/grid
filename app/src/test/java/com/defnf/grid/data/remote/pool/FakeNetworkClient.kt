@@ -10,6 +10,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import org.apache.sshd.common.SshException
+import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.SocketException
@@ -102,6 +103,9 @@ class FakeNetworkClient : NetworkClient {
         remotePath: String,
         fileSize: Long
     ): Flow<TransferProgress> = emptyFlow()
+
+    override suspend fun openInputStream(remotePath: String, offset: Long): InputStream =
+        ByteArrayInputStream(ByteArray(0))
 
     override fun isConnected(): Boolean = connected
 

@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Sort
+import com.defnf.grid.presentation.components.HostKeyChangedDialog
 import com.defnf.grid.presentation.components.FileThumbnail
 import com.defnf.grid.presentation.components.FileThumbnailFill
 import com.defnf.grid.presentation.components.hasThumbnail
@@ -669,6 +670,14 @@ fun FileBrowserScreen(
         )
     }
     
+    uiState.hostKeyChange?.let { change ->
+        HostKeyChangedDialog(
+            change = change,
+            onTrust = { viewModel.trustChangedHostKey() },
+            onDismiss = { viewModel.dismissHostKeyChange() }
+        )
+    }
+
     // Delete confirmation dialog
     if (uiState.showDeleteConfirmation) {
         val selectedCount = uiState.selectedFiles.size
@@ -1047,20 +1056,32 @@ private fun handleFileOpen(
     
     val fileType = getFileType(file.name)
     
+    fun viewerIntent() = Intent(context, com.defnf.grid.presentation.fileviewer.FileViewerActivity::class.java).apply {
+        putExtra("file_name", file.name)
+        putExtra("file_type", fileType.name)
+        putExtra("connection_id", connectionId)
+        putExtra("remote_path", file.path)
+    }
+
     when (fileType) {
+        // Media streams from the server, so playback starts without waiting for a download
+        FileType.AUDIO, FileType.VIDEO -> {
+            viewModel.openMedia(
+                file = file,
+                onLocalFile = { cached ->
+                    fileViewerLauncher.launch(viewerIntent().putExtra("file_path", cached.absolutePath))
+                },
+                onStream = { uri ->
+                    fileViewerLauncher.launch(viewerIntent().putExtra("stream_uri", uri))
+                }
+            )
+        }
         // UNKNOWN opens in the viewer too, which offers to hand the file to another app.
-        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF, FileType.AUDIO,
-        FileType.VIDEO, FileType.ARCHIVE, FileType.EBOOK, FileType.APK, FileType.UNKNOWN -> {
+        FileType.TEXT, FileType.CODE, FileType.MARKDOWN, FileType.IMAGE, FileType.PDF,
+        FileType.ARCHIVE, FileType.EBOOK, FileType.APK, FileType.UNKNOWN -> {
             viewModel.openFile(file) { tempFile ->
                 // Start FileViewerActivity with the downloaded file
-                val intent = Intent(context, com.defnf.grid.presentation.fileviewer.FileViewerActivity::class.java).apply {
-                    putExtra("file_path", tempFile.absolutePath)
-                    putExtra("file_name", file.name)
-                    putExtra("file_type", fileType.name)
-                    putExtra("connection_id", connectionId)
-                    putExtra("remote_path", file.path)
-                }
-                fileViewerLauncher.launch(intent)
+                fileViewerLauncher.launch(viewerIntent().putExtra("file_path", tempFile.absolutePath))
             }
         }
     }

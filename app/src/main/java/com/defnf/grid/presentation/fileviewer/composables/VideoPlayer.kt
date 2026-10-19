@@ -40,7 +40,8 @@ fun VideoPlayer(
     modifier: Modifier = Modifier,
     fileName: String? = null,
     connectionId: String? = null,
-    remotePath: String? = null
+    remotePath: String? = null,
+    streamUri: String? = null
 ) {
     val context = LocalContext.current
     var mediaController by remember { mutableStateOf<MediaController?>(null) }
@@ -53,6 +54,8 @@ fun VideoPlayer(
     
     // Display name - use original fileName if available, otherwise file name
     val displayName = fileName ?: file.name
+    // Streams play straight from the server; otherwise play the downloaded copy
+    val mediaUri = streamUri ?: file.toURI().toString()
 
     // Auto-hide controls after 5 seconds
     LaunchedEffect(showControls, isPlaying) {
@@ -63,19 +66,19 @@ fun VideoPlayer(
     }
 
     // Initialize MediaController with video service
-    LaunchedEffect(file.absolutePath) { // Use file path as key to prevent recreation on rotation
+    LaunchedEffect(mediaUri) { // Keyed on the media so rotation doesn't recreate it
         try {
             isLoading = true
             error = null
             
             // Get or create MediaController through manager
             val controller = MediaControllerManager.getVideoController(
-                context, file, fileName, connectionId, remotePath
+                context, file, fileName, connectionId, remotePath, streamUri
             )
             
             if (controller != null) {
                 // Only set media if this is a new controller or different file
-                if (controller.currentMediaItem?.localConfiguration?.uri?.toString() != file.toURI().toString()) {
+                if (controller.currentMediaItem?.localConfiguration?.uri?.toString() != mediaUri) {
                     // Create media item with metadata
                     val mediaMetadata = MediaMetadata.Builder()
                         .setTitle(displayName)
@@ -83,7 +86,7 @@ fun VideoPlayer(
                         .build()
                     
                     val mediaItem = MediaItem.Builder()
-                        .setUri(file.toURI().toString())
+                        .setUri(mediaUri)
                         .setMediaMetadata(mediaMetadata)
                         .build()
                     
@@ -180,7 +183,7 @@ fun VideoPlayer(
             }
             mediaController != null -> {
                 // Video player without default controls - maintain playback state across rotations
-                key(file.absolutePath) { // Use file path as key to prevent recreation
+                key(mediaUri) { // Keyed on the media to prevent recreation
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { context ->

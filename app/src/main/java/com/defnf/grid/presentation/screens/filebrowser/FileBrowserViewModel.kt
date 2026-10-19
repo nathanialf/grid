@@ -25,8 +25,13 @@ import com.defnf.grid.domain.usecase.file.RenameDirUseCase
 import com.defnf.grid.domain.usecase.file.UploadFileUseCase
 import com.defnf.grid.domain.usecase.settings.GetSettingsUseCase
 import com.defnf.grid.domain.repository.FileRepository
+import com.defnf.grid.data.media.RemoteMediaUri
+import com.defnf.grid.data.remote.ssh.HostKeyVerifier
+import com.defnf.grid.di.IoDispatcher
+import com.defnf.grid.domain.model.HostKeyChangedException
+import com.defnf.grid.domain.model.findHostKeyChange
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,6 +56,8 @@ class FileBrowserViewModel @Inject constructor(
     private val renameDirUseCase: RenameDirUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val fileRepository: FileRepository,
+    private val hostKeyVerifier: HostKeyVerifier,
+    @IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -131,6 +138,18 @@ class FileBrowserViewModel @Inject constructor(
         loadFiles(_uiState.value.currentPath)
     }
 
+    /** The user accepted the server's new host key; remember it and reconnect. */
+    fun trustChangedHostKey() {
+        val change = _uiState.value.hostKeyChange ?: return
+        hostKeyVerifier.trust(change.host, change.port, change.fingerprint)
+        _uiState.value = _uiState.value.copy(hostKeyChange = null, error = null)
+        refresh()
+    }
+
+    fun dismissHostKeyChange() {
+        _uiState.value = _uiState.value.copy(hostKeyChange = null)
+    }
+
     private fun loadFiles(path: String) {
         val connection = currentConnection ?: return
 
@@ -153,6 +172,7 @@ class FileBrowserViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(
                     files = emptyList(),
                     isLoading = false,
+                    hostKeyChange = exception.findHostKeyChange(),
                     error = exception.message ?: "Failed to load files"
                 )
             }
@@ -193,16 +213,13 @@ class FileBrowserViewModel @Inject constructor(
         }
 
         val job = viewModelScope.launch {
-            val tempDir = File(application.cacheDir, "opened_files")
-            // Create cache filename that includes connection and path info to avoid conflicts
-            // Replace both forward and backward slashes to handle both SFTP and SMB paths
-            val cacheFileName = "${connection.id}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
-            val tempFile = File(tempDir, cacheFileName)
+            val tempFile = cacheFileFor(connection, file)
+            val tempDir = tempFile.parentFile ?: application.cacheDir
             // Download next to the cache entry and swap it in only once complete, so a cancelled
             // or failed transfer never leaves a truncated file that looks like a valid cache hit.
-            val partFile = File(tempDir, "$cacheFileName.part")
+            val partFile = File(tempDir, "${tempFile.name}.part")
             try {
-                val cached = withContext(Dispatchers.IO) {
+                val cached = withContext(ioDispatcher) {
                     tempDir.mkdirs()
                     tempFile.exists() && isCacheValid(tempFile, file)
                 }
@@ -237,7 +254,7 @@ class FileBrowserViewModel @Inject constructor(
 
                 // The flow completes once the file is fully written and closed (this also covers
                 // empty files, which never report a COMPLETED progress tick).
-                withContext(Dispatchers.IO) {
+                withContext(ioDispatcher) {
                     tempFile.delete()
                     if (!partFile.renameTo(tempFile)) {
                         throw java.io.IOException("Couldn't save ${file.name} to the cache")
@@ -249,7 +266,7 @@ class FileBrowserViewModel @Inject constructor(
                 )
                 onFileReady(tempFile)
             } catch (exception: Exception) {
-                withContext(NonCancellable + Dispatchers.IO) { partFile.delete() }
+                withContext(NonCancellable + ioDispatcher) { partFile.delete() }
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles - file.path,
                     downloadProgress = _uiState.value.downloadProgress - file.path,
@@ -271,6 +288,32 @@ class FileBrowserViewModel @Inject constructor(
             downloadJobs[file.path] = job
         }
     }
+
+    /**
+     * Audio and video play straight from the server instead of downloading first; a valid cached
+     * copy is still preferred since it needs no network at all.
+     */
+    fun openMedia(file: RemoteFile, onLocalFile: (File) -> Unit, onStream: (String) -> Unit) {
+        val connection = currentConnection ?: return
+        viewModelScope.launch {
+            val cached = cacheFileFor(connection, file)
+            val useCache = withContext(ioDispatcher) { cached.exists() && isCacheValid(cached, file) }
+            if (useCache) {
+                onLocalFile(cached)
+            } else {
+                onStream(RemoteMediaUri.build(connection.id, file.path, file.name, file.size).toString())
+            }
+        }
+    }
+
+    /**
+     * Where an opened file is cached. The name includes connection and path to avoid conflicts,
+     * with both forward and backward slashes replaced to handle SFTP and SMB paths.
+     */
+    private fun cacheFileFor(connection: Connection, file: RemoteFile): File = File(
+        File(application.cacheDir, "opened_files"),
+        "${connection.id}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
+    )
 
     fun cancelDownload(filePath: String) {
         downloadJobs[filePath]?.cancel()
@@ -350,7 +393,7 @@ class FileBrowserViewModel @Inject constructor(
                     try {
                         // ContentResolver queries and the local copy are disk I/O; keep them off
                         // the main thread so large files don't freeze the UI.
-                        val fileName = withContext(Dispatchers.IO) { resolveDisplayName(uri) }
+                        val fileName = withContext(ioDispatcher) { resolveDisplayName(uri) }
                         val remotePath = if (currentPath.endsWith("/")) {
                             "$currentPath$fileName"
                         } else {
@@ -358,7 +401,7 @@ class FileBrowserViewModel @Inject constructor(
                         }
                         _uiState.value = _uiState.value.copy(uploadFileName = fileName)
 
-                        tempFile = withContext(Dispatchers.IO) { createTempFileFromUri(uri, fileName) }
+                        tempFile = withContext(ioDispatcher) { createTempFileFromUri(uri, fileName) }
                             ?: throw Exception("Failed to read file from URI")
 
                         // Use the UploadFileUseCase with progress tracking
@@ -925,6 +968,8 @@ data class FileBrowserUiState(
     val isSelectionMode: Boolean = false,
     val selectedFiles: Set<String> = emptySet(),
     val showDeleteConfirmation: Boolean = false,
+    // Set when the SFTP server's host key no longer matches the trusted one
+    val hostKeyChange: HostKeyChangedException? = null,
     val error: String? = null,
     val message: String? = null
 )

@@ -94,14 +94,23 @@ class SftpClient @Inject constructor(
                 // half-open session and its thread leak.
                 runCatching { openedSession?.close(true) }
                 trace.finish("timeout")
-                Result.Error(IOException("Connection timed out", e))
+                Result.Error(hostKeyChangeFor(connection) ?: IOException("Connection timed out", e))
             } catch (e: Exception) {
                 runCatching { openedSession?.close(true) }
                 trace.finish("error")
                 GridLog.w(GridLog.TAG_SFTP, "Connect failed", e)
-                Result.Error(e)
+                Result.Error(hostKeyChangeFor(connection) ?: e)
             }
         }
+
+    /**
+     * A rejected host key surfaces from sshd as a generic auth/KEX failure; report it as what it is
+     * so the UI can show the new fingerprint and offer to trust it.
+     */
+    private fun hostKeyChangeFor(connection: Connection): HostKeyChangedException? =
+        sshClientProvider.hostKeyVerifier
+            .takeMismatch(connection.hostname, connection.effectivePort)
+            ?.let { HostKeyChangedException(connection.hostname, connection.effectivePort, it) }
 
     /** Tries key auth when a key is present, falling back to password on any failure. */
     private fun authenticate(session: ClientSession, credential: Credential): Boolean {
@@ -271,6 +280,21 @@ class SftpClient @Inject constructor(
         }
     }
     
+    override suspend fun openInputStream(remotePath: String, offset: Long): InputStream =
+        withContext(Dispatchers.IO) {
+            val client = sftpClient ?: throw IOException("Not connected")
+            // read() returns an SftpInputStreamAsync, which keeps many reads in flight; skipping
+            // before the first read only moves its starting offset, so seeking costs no transfer.
+            val stream = client.read(remotePath, SshTuning.TRANSFER_BUFFER_BYTES)
+            var remaining = offset
+            while (remaining > 0) {
+                val skipped = stream.skip(remaining)
+                if (skipped <= 0) break
+                remaining -= skipped
+            }
+            stream
+        }
+
     override suspend fun downloadFile(remotePath: String, outputStream: OutputStream): Flow<TransferProgress> = flow {
         val client = sftpClient ?: throw Exception("Not connected")
         

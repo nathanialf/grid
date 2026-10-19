@@ -13,6 +13,8 @@ import com.defnf.grid.domain.usecase.credential.CreateCredentialUseCase
 import com.defnf.grid.domain.usecase.credential.GetCredentialUseCase
 import com.defnf.grid.domain.usecase.credential.UpdateCredentialUseCase
 import com.defnf.grid.data.local.SshKeyManager
+import com.defnf.grid.data.remote.ssh.HostKeyVerifier
+import com.defnf.grid.domain.model.HostKeyChangedException
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,7 +34,8 @@ class AddConnectionViewModel @Inject constructor(
     private val updateCredentialUseCase: UpdateCredentialUseCase,
     private val getCredentialUseCase: GetCredentialUseCase,
     private val testConnectionUseCase: TestConnectionUseCase,
-    private val sshKeyManager: SshKeyManager
+    private val sshKeyManager: SshKeyManager,
+    private val hostKeyVerifier: HostKeyVerifier
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddConnectionUiState())
@@ -249,7 +252,8 @@ class AddConnectionViewModel @Inject constructor(
                 // Copy from the latest state so edits made during a slow test aren't reverted
                 _uiState.value = _uiState.value.copy(
                     isTesting = false,
-                    testResult = if (result.isSuccess) "Connection successful!" else "Connection failed: ${result.error}"
+                    testResult = if (result.isSuccess) "Connection successful!" else "Connection failed: ${result.error}",
+                    hostKeyChange = result.hostKeyChange
                 )
             } catch (exception: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -258,6 +262,18 @@ class AddConnectionViewModel @Inject constructor(
                 )
             }
         }
+    }
+
+    /** The user accepted the server's new host key; remember it and test again. */
+    fun trustChangedHostKey() {
+        val change = _uiState.value.hostKeyChange ?: return
+        hostKeyVerifier.trust(change.host, change.port, change.fingerprint)
+        _uiState.value = _uiState.value.copy(hostKeyChange = null, testResult = null)
+        testConnection()
+    }
+
+    fun dismissHostKeyChange() {
+        _uiState.value = _uiState.value.copy(hostKeyChange = null)
     }
 
     fun clearError() {
@@ -282,5 +298,6 @@ data class AddConnectionUiState(
     val testResult: String? = null,
     val isGeneratingKey: Boolean = false,
     val hasGeneratedKey: Boolean = false,
-    val generatedPublicKey: String? = null
+    val generatedPublicKey: String? = null,
+    val hostKeyChange: HostKeyChangedException? = null
 )

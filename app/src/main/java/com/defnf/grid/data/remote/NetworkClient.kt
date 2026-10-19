@@ -14,5 +14,11 @@ interface NetworkClient {
     suspend fun renameFile(oldPath: String, newPath: String): Result<Unit>
     suspend fun downloadFile(remotePath: String, outputStream: OutputStream): Flow<TransferProgress>
     suspend fun uploadFile(localInputStream: InputStream, remotePath: String, fileSize: Long): Flow<TransferProgress>
+
+    /**
+     * Opens [remotePath] for sequential reading starting at byte [offset], for streaming playback.
+     * Closing the stream releases the remote file handle.
+     */
+    suspend fun openInputStream(remotePath: String, offset: Long): InputStream
     fun isConnected(): Boolean
 }

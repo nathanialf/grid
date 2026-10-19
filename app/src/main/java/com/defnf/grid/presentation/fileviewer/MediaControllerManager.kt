@@ -32,16 +32,18 @@ object MediaControllerManager {
         file: File,
         fileName: String?,
         connectionId: String?,
-        remotePath: String?
-    ): MediaController? = audio.get(context, file, fileName, connectionId, remotePath)
+        remotePath: String?,
+        streamUri: String? = null
+    ): MediaController? = audio.get(context, file, fileName, connectionId, remotePath, streamUri)
 
     suspend fun getVideoController(
         context: Context,
         file: File,
         fileName: String?,
         connectionId: String?,
-        remotePath: String?
-    ): MediaController? = video.get(context, file, fileName, connectionId, remotePath)
+        remotePath: String?,
+        streamUri: String? = null
+    ): MediaController? = video.get(context, file, fileName, connectionId, remotePath, streamUri)
 
     fun getCurrentAudioFile(): String? = audio.currentFile
     fun getCurrentVideoFile(): String? = video.currentFile
@@ -66,8 +68,11 @@ object MediaControllerManager {
             file: File,
             fileName: String?,
             connectionId: String?,
-            remotePath: String?
+            remotePath: String?,
+            streamUri: String?
         ): MediaController? {
+            // What is playing: the grid:// stream when streaming, otherwise the local file
+            val source = streamUri ?: file.absolutePath
             // Controllers outlive the activity that asked for them, so never hold an Activity.
             val appContext = context.applicationContext
 
@@ -75,7 +80,8 @@ object MediaControllerManager {
             try {
                 appContext.startService(
                     Intent(appContext, service).apply {
-                        putExtra("file_path", file.absolutePath)
+                        if (streamUri == null) putExtra("file_path", file.absolutePath)
+                        putExtra("stream_uri", streamUri)
                         putExtra("file_name", fileName)
                         putExtra("connection_id", connectionId)
                         putExtra("remote_path", remotePath)
@@ -88,7 +94,7 @@ object MediaControllerManager {
 
             controller?.let { existing ->
                 if (existing.isConnected) {
-                    currentFile = file.absolutePath
+                    currentFile = source
                     return existing
                 }
                 release()
@@ -115,7 +121,7 @@ object MediaControllerManager {
             if (pending === future) pending = null
             if (built != null) {
                 controller = built
-                currentFile = file.absolutePath
+                currentFile = source
             }
             return built
         }

@@ -26,11 +26,6 @@ internal class RemoteFileProxyCallback(
 
     private val closeIdle = Runnable { reader.closeStream() }
 
-    init {
-        // The reader was primed with an open stream; an app that never reads must not keep it.
-        handler.postDelayed(closeIdle, IDLE_CLOSE_MS)
-    }
-
     override fun onGetSize(): Long = reader.size
 
     override fun onRead(offset: Long, size: Int, data: ByteArray): Int {

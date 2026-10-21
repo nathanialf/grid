@@ -3,6 +3,7 @@ package com.defnf.grid.data.provider
 import java.io.Closeable
 import java.io.IOException
 import java.io.InputStream
+import java.io.InterruptedIOException
 
 /**
  * Serves reads at arbitrary offsets of a server file from one sequential stream.
@@ -11,10 +12,10 @@ import java.io.InputStream
  * stream simply keeps going; a jump reopens it at the new offset, and a short hop forward reads
  * through instead, which is cheaper than a reopen. A stream that fails mid-read (Wi-Fi to cellular,
  * a server dropping an idle session) is reopened where it stopped instead of failing the read, so a
- * blip costs the reading app a pause rather than its whole upload.
+ * blip costs the reading app a pause rather than its whole upload. Any failure counts, not only
+ * IOExceptions: smbj reports a dropped session with unchecked exceptions.
  *
- * Calls are synchronized: the reader is primed on the thread that opens the document and read on
- * the descriptor's own thread afterwards.
+ * Not thread-safe: [RemoteFileProxyCallback] makes every call from the descriptor's own thread.
  */
 internal class RemoteRangeReader(
     val size: Long,
@@ -24,14 +25,7 @@ internal class RemoteRangeReader(
     private var stream: InputStream? = null
     private var position = 0L
 
-    /** Opens the stream at the start, so a file that can't be read fails to open, not on first read. */
-    @Synchronized
-    fun prime() {
-        if (size > 0) streamAt(0)
-    }
-
     /** Reads up to [length] bytes at [offset] into [data]; fewer only at the end of the file. */
-    @Synchronized
     fun read(offset: Long, length: Int, data: ByteArray): Int {
         if (length <= 0 || offset >= size) return 0
         val wanted = minOf(length.toLong(), size - offset).toInt()
@@ -40,11 +34,15 @@ internal class RemoteRangeReader(
         while (filled < wanted) {
             try {
                 val read = streamAt(offset + filled).read(data, filled, wanted - filled)
-                if (read == -1) break // The file shrank on the server since it was listed.
+                if (read == -1) break // The file shrank on the server since it was looked up.
                 filled += read
                 position += read
                 failures = 0
-            } catch (e: IOException) {
+            } catch (e: InterruptedIOException) {
+                // The reading app gave up; reopening would only ignore it.
+                closeStream()
+                throw e
+            } catch (e: Exception) {
                 closeStream()
                 if (++failures > MAX_REOPENS) throw e
             }
@@ -53,7 +51,6 @@ internal class RemoteRangeReader(
     }
 
     /** Lets go of the server stream (and its pooled session) until the next read needs it. */
-    @Synchronized
     fun closeStream() {
         val current = stream ?: return
         stream = null
@@ -64,7 +61,6 @@ internal class RemoteRangeReader(
         }
     }
 
-    @Synchronized
     override fun close() = closeStream()
 
     private fun streamAt(offset: Long): InputStream {

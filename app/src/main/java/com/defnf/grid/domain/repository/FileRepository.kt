@@ -8,7 +8,7 @@ interface FileRepository {
     suspend fun testConnection(connection: Connection, credential: Credential): Result<Unit>
 
     suspend fun listFiles(connection: Connection, path: String): List<RemoteFile>
-    suspend fun getFiles(connection: Connection, path: String): List<RemoteFile>
+    suspend fun getFile(connection: Connection, path: String): RemoteFile
     suspend fun createDirectory(connection: Connection, directoryPath: String)
     suspend fun deleteFile(connection: Connection, filePath: String)
     suspend fun renameFile(connection: Connection, oldPath: String, newPath: String)

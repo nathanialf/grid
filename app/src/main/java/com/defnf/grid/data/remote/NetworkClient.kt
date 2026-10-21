@@ -9,6 +9,9 @@ interface NetworkClient {
     suspend fun connect(connection: Connection, credential: Credential): Result<Unit>
     suspend fun disconnect(): Result<Unit>
     suspend fun listFiles(path: String): Result<List<RemoteFile>>
+
+    /** [path]'s current entry on the server; a symlink reports what it points at. */
+    suspend fun stat(path: String): Result<RemoteFile>
     suspend fun createDirectory(path: String): Result<Unit>
     suspend fun deleteFile(path: String): Result<Unit>
     suspend fun renameFile(oldPath: String, newPath: String): Result<Unit>

@@ -230,7 +230,14 @@ class ConnectionPool @VisibleForTesting internal constructor(
         }
     }
 
-    /** Returns its lease to the pool when closed, and flags the session if reading hit a dead link. */
+    /** [openStream] for reading the file at [remotePath] from byte [offset] on. */
+    suspend fun openFile(connection: Connection, remotePath: String, offset: Long): InputStream =
+        openStream(connection) { client -> client.openInputStream(remotePath, offset) }
+
+    /**
+     * Returns its lease to the pool when closed, and flags the session if reading hit a dead link.
+     * smbj reports a dropped session as an unchecked exception, so those are checked as well.
+     */
     private inner class LeasedInputStream(
         stream: InputStream,
         private val lease: Lease
@@ -239,23 +246,23 @@ class ConnectionPool @VisibleForTesting internal constructor(
 
         override fun read(): Int = try {
             super.read()
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             throw flagIfDead(e)
         }
 
         override fun read(b: ByteArray, off: Int, len: Int): Int = try {
             super.read(b, off, len)
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             throw flagIfDead(e)
         }
 
         override fun skip(n: Long): Long = try {
             super.skip(n)
-        } catch (e: IOException) {
+        } catch (e: Exception) {
             throw flagIfDead(e)
         }
 
-        private fun flagIfDead(e: IOException): IOException {
+        private fun flagIfDead(e: Exception): Exception {
             if (ConnectionFaults.isConnectionFault(e)) lease.entry.invalid = true
             return e
         }
@@ -264,7 +271,7 @@ class ConnectionPool @VisibleForTesting internal constructor(
             if (!closed.compareAndSet(false, true)) return
             try {
                 super.close()
-            } catch (e: IOException) {
+            } catch (e: Exception) {
                 flagIfDead(e)
                 GridLog.w(TAG, "Closing stream failed", e)
             } finally {

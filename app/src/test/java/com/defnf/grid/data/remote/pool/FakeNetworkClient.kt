@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import org.apache.sshd.common.SshException
 import java.io.ByteArrayInputStream
+import java.io.FilterInputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.SocketException
@@ -86,6 +87,15 @@ class FakeNetworkClient : NetworkClient {
         Result.Success(emptyList())
     }
 
+    override suspend fun stat(path: String): Result<RemoteFile> = Result.Success(
+        RemoteFile(
+            name = path.substringAfterLast('/'),
+            path = path,
+            isDirectory = false,
+            size = fileContents[path]?.size?.toLong() ?: 0L
+        )
+    )
+
     override suspend fun createDirectory(path: String): Result<Unit> = Result.Success(Unit)
 
     override suspend fun deleteFile(path: String): Result<Unit> = Result.Success(Unit)
@@ -108,10 +118,18 @@ class FakeNetworkClient : NetworkClient {
     @Volatile
     var fileContents: Map<String, ByteArray> = emptyMap()
 
+    /** When set, every read of an open stream throws this, as a dropped session would. */
+    @Volatile
+    var streamReadFailure: Exception? = null
+
     override suspend fun openInputStream(remotePath: String, offset: Long): InputStream {
         val bytes = fileContents[remotePath] ?: ByteArray(0)
         val start = offset.coerceAtMost(bytes.size.toLong()).toInt()
-        return ByteArrayInputStream(bytes, start, bytes.size - start)
+        return object : FilterInputStream(ByteArrayInputStream(bytes, start, bytes.size - start)) {
+            override fun read(): Int = streamReadFailure?.let { throw it } ?: super.read()
+            override fun read(b: ByteArray, off: Int, len: Int): Int =
+                streamReadFailure?.let { throw it } ?: super.read(b, off, len)
+        }
     }
 
     override fun isConnected(): Boolean = connected

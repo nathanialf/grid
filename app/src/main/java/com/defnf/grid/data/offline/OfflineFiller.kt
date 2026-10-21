@@ -195,7 +195,7 @@ class OfflineFiller @Inject constructor(
 
     private suspend fun copyFrom(connection: Connection, remotePath: String, fill: Fill, key: String) {
         val offset = fill.written
-        pool.openStream(connection) { client -> client.openInputStream(remotePath, offset) }.use { input ->
+        pool.openFile(connection, remotePath, offset).use { input ->
             FileOutputStream(fill.part, /* append = */ true).use { output ->
                 val buffer = ByteArray(BUFFER_BYTES)
                 var written = offset

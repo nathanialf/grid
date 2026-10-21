@@ -6,6 +6,7 @@ import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.InterruptedIOException
 
 class RemoteRangeReaderTest {
 
@@ -46,7 +47,6 @@ class RemoteRangeReaderTest {
     @Test
     fun `sequential reads use one stream and fill every chunk`() {
         val reader = reader()
-        reader.prime()
         assertArrayEquals(content, readAll(reader))
         assertEquals(listOf(0L), opens)
     }
@@ -57,6 +57,41 @@ class RemoteRangeReaderTest {
         val reader = reader { attempt -> if (attempt == 1) 300_000 else Int.MAX_VALUE }
         assertArrayEquals(content, readAll(reader))
         assertEquals(listOf(0L, 300_000L), opens)
+    }
+
+    @Test
+    fun `an unchecked failure is retried like an IOException`() {
+        var failed = false
+        val reader = RemoteRangeReader(content.size.toLong()) { offset ->
+            opens += offset
+            if (!failed) {
+                failed = true
+                object : InputStream() {
+                    override fun read(): Int = throw IllegalStateException("session dropped")
+                    override fun read(b: ByteArray, off: Int, len: Int): Int = throw IllegalStateException("session dropped")
+                }
+            } else {
+                FlakyStream(offset, Int.MAX_VALUE)
+            }
+        }
+        assertArrayEquals(content, readAll(reader))
+        assertEquals(listOf(0L, 0L), opens)
+    }
+
+    @Test(expected = InterruptedIOException::class)
+    fun `an interrupted read is not retried`() {
+        val reader = RemoteRangeReader(content.size.toLong()) { offset ->
+            opens += offset
+            object : InputStream() {
+                override fun read(): Int = throw InterruptedIOException()
+                override fun read(b: ByteArray, off: Int, len: Int): Int = throw InterruptedIOException()
+            }
+        }
+        try {
+            reader.read(0, 1024, ByteArray(1024))
+        } finally {
+            assertEquals(listOf(0L), opens)
+        }
     }
 
     @Test(expected = IOException::class)

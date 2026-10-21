@@ -210,6 +210,26 @@ class SmbClient @Inject constructor(
         }
     }
     
+    override suspend fun stat(path: String): Result<RemoteFile> = withContext(Dispatchers.IO) {
+        try {
+            val share = diskShare ?: return@withContext Result.Error(Exception("Not connected"))
+
+            val info = share.getFileInformation(path)
+            Result.Success(
+                RemoteFile(
+                    name = path.trimEnd('\\').substringAfterLast('\\'),
+                    path = path,
+                    isDirectory = info.standardInformation.isDirectory,
+                    size = info.standardInformation.endOfFile,
+                    lastModified = info.basicInformation.lastWriteTime?.toEpochMillis() ?: 0L,
+                    isHidden = info.basicInformation.fileAttributes and FileAttributes.FILE_ATTRIBUTE_HIDDEN.value != 0L
+                )
+            )
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
     override suspend fun createDirectory(path: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val share = diskShare ?: return@withContext Result.Error(Exception("Not connected"))

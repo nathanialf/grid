@@ -42,8 +42,8 @@ class FileRepositoryImpl @Inject constructor(
     override suspend fun listFiles(connection: Connection, path: String): List<RemoteFile> =
         pool.withClient(connection) { client -> client.listFiles(path).orThrow() }
 
-    override suspend fun getFiles(connection: Connection, path: String): List<RemoteFile> =
-        listFiles(connection, path)
+    override suspend fun getFile(connection: Connection, path: String): RemoteFile =
+        pool.withClient(connection) { client -> client.stat(path).orThrow() }
 
     // Everything below that changes remote state passes retryOnStale = false. A request that died in
     // flight may already have been applied on the server, so a silent retry could create a directory

@@ -154,9 +154,7 @@ class RemoteFileDataSource(
         val resolved = connection ?: throw IOException("No connection")
         val path = remotePath ?: throw IOException("No remote path")
         val offset = position
-        stream = runBlocking {
-            pool.openStream(resolved) { client -> client.openInputStream(path, offset) }
-        }
+        stream = runBlocking { pool.openFile(resolved, path, offset) }
     }
 
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {

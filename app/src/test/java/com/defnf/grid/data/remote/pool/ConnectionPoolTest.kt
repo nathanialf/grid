@@ -16,8 +16,10 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import com.hierynomus.smbj.common.SMBRuntimeException
 import org.apache.sshd.common.SshException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -168,6 +170,23 @@ class ConnectionPoolTest {
         // Retried on a brand new client rather than the dead one.
         assertEquals(2, clients.size)
         assertEquals(1, clients[1].connectCount.get())
+    }
+
+    @Test
+    fun `a stream that dies with an unchecked smb error retires its session`() = runTest {
+        val pool = pool()
+        val stream = pool.openFile(connection(), "/a", 0)
+        clients[0].streamReadFailure = SMBRuntimeException("session dropped")
+
+        assertThrows(SMBRuntimeException::class.java) { stream.read(ByteArray(8), 0, 8) }
+        // close() hands its lease back on the pool's scope, which advanceUntilIdle leaves alone.
+        stream.close()
+        runCurrent()
+
+        // The dead session was closed with its last lease, so the next operation opens a new one.
+        assertEquals(1, clients[0].disconnectCount.get())
+        pool.withClient(connection()) { it.listFiles("/") }
+        assertEquals(2, clients.size)
     }
 
     @Test

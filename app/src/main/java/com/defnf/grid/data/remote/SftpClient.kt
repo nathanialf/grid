@@ -220,6 +220,28 @@ class SftpClient @Inject constructor(
         }
     }
     
+    override suspend fun stat(path: String): Result<RemoteFile> = withContext(Dispatchers.IO) {
+        try {
+            val client = sftpClient ?: return@withContext Result.Error(Exception("Not connected"))
+
+            val attrs = client.stat(path)
+            val name = path.trimEnd('/').substringAfterLast('/')
+            Result.Success(
+                RemoteFile(
+                    name = name,
+                    path = path,
+                    isDirectory = attrs.isDirectory,
+                    size = attrs.size,
+                    lastModified = attrs.modifyTime?.toMillis() ?: 0L,
+                    permissions = attrs.permissions.toString(),
+                    isHidden = name.startsWith(".")
+                )
+            )
+        } catch (e: Exception) {
+            Result.Error(e)
+        }
+    }
+
     override suspend fun createDirectory(path: String): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val client = sftpClient ?: return@withContext Result.Error(Exception("Not connected"))

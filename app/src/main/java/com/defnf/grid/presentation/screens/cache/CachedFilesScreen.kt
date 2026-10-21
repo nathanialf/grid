@@ -254,7 +254,7 @@ private fun EmptyCacheView(
                         modifier = Modifier.size(ButtonDefaults.IconSize)
                     )
                     Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Clear ${Formatter.formatFileSize(context, unfinishedSize)} of unfinished saves")
+                    Text("Clear ${Formatter.formatShortFileSize(context, unfinishedSize)} of unfinished saves")
                 }
             }
         }
@@ -548,6 +548,11 @@ private fun CachedFileItem(
     SegmentedListItem(
         onClick = onClick,
         shapes = shapes,
+        // The default segmented container is Surface, invisible on the Scaffold's Surface
+        // background; a container tone makes the grouped shape read
+        colors = ListItemDefaults.segmentedColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
         leadingContent = {
             if (hasThumbnail(cachedFile.name, isDirectory = false, localFile = localFile)) {
                 FileThumbnailFill(

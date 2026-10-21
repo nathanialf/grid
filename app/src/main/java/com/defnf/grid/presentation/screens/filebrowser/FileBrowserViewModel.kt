@@ -149,6 +149,34 @@ class FileBrowserViewModel @Inject constructor(
         loadFiles(_uiState.value.currentPath)
     }
 
+    /**
+     * The listed files that have an offline copy, matched by exact name: shared storage ignores
+     * case, so a plain exists() would also match another file's copy.
+     */
+    private suspend fun offlineCopiesOf(connection: Connection, files: List<RemoteFile>): Map<String, File> {
+        val folder = _uiState.value.offlineFolder ?: return emptyMap()
+        return withContext(ioDispatcher) {
+            files.filter { !it.isDirectory }
+                .groupBy { OfflineStore.fileIn(folder, it.path, connection.protocol).parentFile }
+                .flatMap { (dir, inDir) ->
+                    val names = dir?.list()?.toHashSet() ?: return@flatMap emptyList()
+                    inDir.mapNotNull { file ->
+                        val local = OfflineStore.fileIn(folder, file.path, connection.protocol)
+                        if (local.name in names) file.path to local else null
+                    }
+                }
+                .toMap()
+        }
+    }
+
+    private fun refreshOfflineCopies() {
+        val connection = currentConnection ?: return
+        viewModelScope.launch {
+            val copies = offlineCopiesOf(connection, _uiState.value.files)
+            _uiState.value = _uiState.value.copy(offlineCopies = copies)
+        }
+    }
+
     /** Goes to the parent folder; false at the connection's root, which nothing goes above. */
     fun navigateUp(): Boolean {
         val state = _uiState.value
@@ -167,7 +195,12 @@ class FileBrowserViewModel @Inject constructor(
                 .map { fills ->
                     fills.filterKeys { it.startsWith(prefix) }.mapKeys { it.key.removePrefix(prefix) }
                 }
-                .collect { _uiState.value = _uiState.value.copy(fillProgress = it) }
+                .collect { fills ->
+                    val ended = _uiState.value.fillProgress.keys - fills.keys
+                    _uiState.value = _uiState.value.copy(fillProgress = fills)
+                    // A finished save may have a thumbnail to show now.
+                    if (ended.isNotEmpty()) refreshOfflineCopies()
+                }
         }
     }
 
@@ -195,8 +228,10 @@ class FileBrowserViewModel @Inject constructor(
             try {
                 val files = listFilesUseCase(connection, path)
                 val sortedFiles = sortFiles(files, _uiState.value.sortOption)
+                val offlineCopies = offlineCopiesOf(connection, sortedFiles)
                 _uiState.value = _uiState.value.copy(
                     files = sortedFiles,
+                    offlineCopies = offlineCopies,
                     isLoading = false,
                     error = null
                 )
@@ -247,9 +282,8 @@ class FileBrowserViewModel @Inject constructor(
 
         val job = viewModelScope.launch {
             try {
-                val offlineFile = offlineStore.fileFor(connection, file.path)
-                if (withContext(ioDispatcher) { isOffline(offlineFile, file) }) {
-                    onFileReady(offlineFile)
+                existingCopyOf(connection, file)?.let { copy ->
+                    onFileReady(copy)
                     return@launch
                 }
 
@@ -257,12 +291,12 @@ class FileBrowserViewModel @Inject constructor(
                     downloadingFiles = _uiState.value.downloadingFiles + file.path,
                     downloadProgress = _uiState.value.downloadProgress + (file.path to 0f)
                 )
-                fetchOffline(connection, file, offlineFile)
+                val saved = fetchOffline(connection, file, offlineStore.fileFor(connection, file.path))
                 _uiState.value = _uiState.value.copy(
                     downloadingFiles = _uiState.value.downloadingFiles - file.path,
                     downloadProgress = _uiState.value.downloadProgress - file.path
                 )
-                onFileReady(offlineFile)
+                onFileReady(saved)
             } catch (exception: Exception) {
                 // A newer download of the same file owns the progress state now; leave it alone.
                 val owner = downloadJobs[file.path]
@@ -296,21 +330,33 @@ class FileBrowserViewModel @Inject constructor(
     fun openMedia(file: RemoteFile, onLocalFile: (File) -> Unit, onStream: (String) -> Unit) {
         val connection = currentConnection ?: return
         viewModelScope.launch {
-            val offlineFile = offlineStore.fileFor(connection, file.path)
-            if (withContext(ioDispatcher) { isOffline(offlineFile, file) }) {
-                onLocalFile(offlineFile)
+            val copy = existingCopyOf(connection, file)
+            if (copy != null) {
+                onLocalFile(copy)
             } else {
-                onStream(RemoteMediaUri.build(connection.id, file.path, file.name, file.size).toString())
+                onStream(RemoteMediaUri.build(connection.id, file.path, file.name, file.size, file.lastModified).toString())
             }
         }
+    }
+
+    /** A finished local copy of [file]: its offline copy, or else an unlisted fallback copy. */
+    private suspend fun existingCopyOf(connection: Connection, file: RemoteFile): File? {
+        val candidates = listOf(
+            offlineStore.fileFor(connection, file.path),
+            offlineStore.unlistedFileFor(connection, file.path)
+        )
+        return withContext(ioDispatcher) { candidates.firstOrNull { isOffline(it, file) } }
     }
 
     /**
      * Downloads [file] into its offline copy [target] through a hidden part file that is swapped in
      * only once complete, so a cancelled or failed transfer never leaves a truncated file that looks
      * like a finished one. Progress lands in [FileBrowserUiState.downloadProgress].
+     *
+     * Returns the saved file: [target], or an unlisted fallback copy when [target] couldn't be
+     * written (see [placeOutsideDownloads]).
      */
-    private suspend fun fetchOffline(connection: Connection, file: RemoteFile, target: File) {
+    private suspend fun fetchOffline(connection: Connection, file: RemoteFile, target: File): File {
         // Unique per attempt: a cancelled download may still be writing (and then deleting) its
         // part file while a re-tap's new download has already started.
         val partFile = OfflineStore.newPartFor(target)
@@ -338,17 +384,49 @@ class FileBrowserViewModel @Inject constructor(
 
             // The flow completes once the file is fully written and closed (this also covers
             // empty files, which never report a COMPLETED progress tick).
-            withContext(ioDispatcher) {
+            val placed = withContext(ioDispatcher) {
                 target.delete()
-                if (!partFile.renameTo(target)) {
-                    throw java.io.IOException("Couldn't save ${file.name} to ${target.parent}")
-                }
+                partFile.renameTo(target)
             }
+            if (!placed) return placeOutsideDownloads(connection, file, target, partFile)
             offlineStore.publish(target)
+            refreshOfflineCopies()
+            return target
         } catch (exception: Exception) {
             withContext(NonCancellable + ioDispatcher) { partFile.delete() }
             throw exception
         }
+    }
+
+    /**
+     * [target]'s name is taken by a file Grid may not touch: on Android 11+ most likely one an
+     * earlier install of Grid saved, which this install can neither see nor replace. Keeps the
+     * downloaded bytes as an unlisted private copy so the file still opens, and says what's in the way.
+     */
+    private suspend fun placeOutsideDownloads(
+        connection: Connection,
+        file: RemoteFile,
+        target: File,
+        partFile: File
+    ): File {
+        val fallback = offlineStore.unlistedFileFor(connection, file.path)
+        withContext(ioDispatcher) {
+            try {
+                fallback.parentFile?.mkdirs()
+                partFile.copyTo(fallback, overwrite = true)
+            } finally {
+                partFile.delete()
+            }
+        }
+        val reason = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R && !target.exists()) {
+            "a file of that name there likely belongs to an earlier install of Grid. Delete it with a file manager to keep this one offline"
+        } else {
+            "a file of that name there can't be replaced"
+        }
+        _uiState.value = _uiState.value.copy(
+            message = "Couldn't save ${file.name} to ${target.parent}: $reason."
+        )
+        return fallback
     }
 
     fun cancelDownload(filePath: String) {
@@ -698,16 +776,20 @@ class FileBrowserViewModel @Inject constructor(
             try {
                 var downloadedCount = 0
                 var failedCount = 0
+                var blockedCount = 0
                 val skippedDirsCount = selectedFiles.size - filesToDownload.size
                 val offlineFolder = offlineStore.folderFor(connection)
 
                 filesToDownload.forEach { file ->
                     try {
-                        val target = OfflineStore.fileIn(offlineFolder, file.path)
-                        if (!withContext(ioDispatcher) { isOffline(target, file) }) {
+                        val target = offlineStore.fileFor(connection, file.path)
+                        val saved = if (withContext(ioDispatcher) { isOffline(target, file) }) {
+                            target
+                        } else {
                             fetchOffline(connection, file, target)
                         }
-                        downloadedCount++
+                        // Only a copy under Downloads counts as downloaded; an unlisted one doesn't.
+                        if (saved.startsWith(offlineFolder)) downloadedCount++ else blockedCount++
                     } catch (exception: Exception) {
                         if (exception is kotlinx.coroutines.CancellationException) throw exception
                         failedCount++
@@ -723,6 +805,9 @@ class FileBrowserViewModel @Inject constructor(
                 if (downloadedCount > 0) messageParts.add("Downloaded $downloadedCount files")
                 if (skippedDirsCount > 0) messageParts.add("skipped $skippedDirsCount directories")
                 if (failedCount > 0) messageParts.add("failed to download $failedCount files")
+                if (blockedCount > 0) {
+                    messageParts.add("couldn't place $blockedCount in Downloads (a file of that name is in the way)")
+                }
                 
                 val message = if (messageParts.isNotEmpty()) {
                     val baseMessage = messageParts.joinToString(", ").replaceFirstChar { it.uppercase() }
@@ -926,6 +1011,8 @@ data class FileBrowserUiState(
     val downloadProgress: Map<String, Float> = emptyMap(),
     // Streamed media still saving offline in the background, by remote path
     val fillProgress: Map<String, Float> = emptyMap(),
+    // Listed files' offline copies, by remote path (for thumbnails)
+    val offlineCopies: Map<String, File> = emptyMap(),
     val isSelectionMode: Boolean = false,
     val selectedFiles: Set<String> = emptySet(),
     val showDeleteConfirmation: Boolean = false,

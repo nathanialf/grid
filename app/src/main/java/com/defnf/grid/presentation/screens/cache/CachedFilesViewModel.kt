@@ -74,10 +74,12 @@ class CachedFilesViewModel @Inject constructor(
 
             try {
                 val files = withContext(Dispatchers.IO) { offlineStore.list(folder, connection) }
+                val unfinished = withContext(Dispatchers.IO) { offlineStore.unfinishedBytes(folder) }
 
                 _uiState.value = _uiState.value.copy(
                     cachedFiles = files,
                     totalCacheSize = files.sumOf { it.size },
+                    unfinishedSize = unfinished,
                     isLoading = false
                 )
             } catch (e: Exception) {
@@ -96,6 +98,8 @@ class CachedFilesViewModel @Inject constructor(
     fun deleteCachedFile(cachedFile: CachedFile) {
         viewModelScope.launch {
             try {
+                // A save still running for it would put it straight back.
+                offlineFiller.cancel(cachedFile.connectionId, cachedFile.remotePath)
                 val deleted = withContext(Dispatchers.IO) {
                     offlineStore.delete(File(cachedFile.path))
                 }
@@ -134,6 +138,7 @@ class CachedFilesViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         cachedFiles = emptyList(),
                         totalCacheSize = 0L,
+                        unfinishedSize = 0L,
                         isLoading = false,
                         message = "Cache cleared successfully"
                     )
@@ -212,6 +217,8 @@ data class CachedFilesUiState(
     val viewMode: String = "list",
     val cachedFiles: List<CachedFile> = emptyList(),
     val totalCacheSize: Long = 0L,
+    // Hidden, unlisted partial saves (e.g. a stream left part-way), which still take space
+    val unfinishedSize: Long = 0L,
     val isLoading: Boolean = false,
     val showClearCacheConfirmation: Boolean = false,
     val error: String? = null,

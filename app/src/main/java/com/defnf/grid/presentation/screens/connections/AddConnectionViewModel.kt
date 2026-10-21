@@ -198,7 +198,7 @@ class AddConnectionViewModel @Inject constructor(
                     // Offline files follow the connection's name
                     val after = before.map { if (it.id == connection.id) connection else it }
                     withContext(Dispatchers.IO) {
-                        offlineStore.moveFolder(previous, before, connection, after)
+                        offlineStore.moveFolder(connection, after)
                     }
                 } else {
                     createCredentialUseCase(credential)

@@ -36,8 +36,9 @@ object RemoteMediaUri {
     private const val AUTHORITY = "stream"
     private const val PARAM_PATH = "path"
     private const val PARAM_SIZE = "size"
+    private const val PARAM_MODIFIED = "modified"
 
-    fun build(connectionId: String, remotePath: String, fileName: String, size: Long): Uri =
+    fun build(connectionId: String, remotePath: String, fileName: String, size: Long, modified: Long): Uri =
         Uri.Builder()
             .scheme(SCHEME)
             .authority(AUTHORITY)
@@ -46,6 +47,7 @@ object RemoteMediaUri {
             .appendPath(fileName)
             .appendQueryParameter(PARAM_PATH, remotePath)
             .appendQueryParameter(PARAM_SIZE, size.toString())
+            .appendQueryParameter(PARAM_MODIFIED, modified.toString())
             .build()
 
     fun isRemote(uri: Uri): Boolean = uri.scheme == SCHEME
@@ -57,6 +59,9 @@ object RemoteMediaUri {
         uri.getQueryParameter(PARAM_PATH) ?: throw IOException("No remote path in $uri")
 
     internal fun size(uri: Uri): Long = uri.getQueryParameter(PARAM_SIZE)?.toLongOrNull() ?: -1L
+
+    /** The server's modified time when the URI was built; 0 when unknown. */
+    internal fun modified(uri: Uri): Long = uri.getQueryParameter(PARAM_MODIFIED)?.toLongOrNull() ?: 0L
 }
 
 /**
@@ -97,14 +102,23 @@ class RemoteFileDataSource(
             val path = RemoteMediaUri.remotePath(target)
             connection = resolved
             remotePath = path
-            // Saving offline is a bonus; failing to start it must never stop playback.
-            val joined = runCatching { runBlocking { filler.acquire(resolved, path, size) } }
-                .onFailure { GridLog.w(TAG, "Couldn't save $path offline", it) }
-                .getOrNull()
+            // Saving offline is a bonus; failing to start it must never stop playback. An interrupt
+            // is the loader cancelling this load, though, and must end it rather than go remote.
+            val joined = try {
+                runBlocking { filler.acquire(resolved, path, size, RemoteMediaUri.modified(target)) }
+            } catch (e: InterruptedException) {
+                throw e
+            } catch (e: Exception) {
+                GridLog.w(TAG, "Couldn't save $path offline", e)
+                null
+            }
             fill = joined
             if (joined == null || position > joined.written + LOCAL_WINDOW_BYTES || !openLocal(joined)) {
                 openRemote()
             }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw DataSourceException(InterruptedIOException(), PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         } catch (e: IOException) {
             throw DataSourceException(e, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED)
         } catch (e: Exception) {
@@ -123,8 +137,11 @@ class RemoteFileDataSource(
 
     /** Opens the fill's local copy at [position]; false if it isn't there to open. */
     private fun openLocal(fill: OfflineFiller.Fill): Boolean {
-        // The part file may be renamed into place between choosing it and opening it.
-        val file = sequenceOf(fill.readable, fill.target).firstOrNull { it.exists() } ?: return false
+        // The part file may be renamed into place between choosing it and opening it. Only then is
+        // the target the fill's: before that, a target on disk is the outdated copy being replaced.
+        val file = fill.readable.takeIf { it.exists() }
+            ?: fill.target.takeIf { fill.isComplete && it.exists() }
+            ?: return false
         local = try {
             RandomAccessFile(file, "r").apply { seek(position) }
         } catch (e: IOException) {
@@ -206,8 +223,12 @@ class RemoteFileDataSource(
         connection = null
         remotePath = null
         try {
-            closeLocal()
-            stream?.close()
+            // Close the remote stream even if the local file fails to: it holds a pooled session.
+            try {
+                closeLocal()
+            } finally {
+                stream?.close()
+            }
         } catch (e: IOException) {
             throw DataSourceException(e, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         } finally {

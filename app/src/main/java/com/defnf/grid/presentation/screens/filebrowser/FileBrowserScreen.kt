@@ -47,7 +47,6 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpOffset
 import com.defnf.grid.domain.model.RemoteFile
-import com.defnf.grid.data.offline.OfflineStore
 import androidx.core.content.ContextCompat
 import android.Manifest
 import android.content.pm.PackageManager
@@ -419,7 +418,7 @@ fun FileBrowserScreen(
                             FileGridItem(
                                 modifier = Modifier.animateItem(),
                                 file = file,
-                                thumbnailFile = remember(file.path, uiState.offlineFolder) { offlineThumbnailFile(uiState.offlineFolder, file) },
+                                thumbnailFile = offlineThumbnailFile(uiState.offlineCopies[file.path], file),
                                 onClick = {
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
@@ -468,7 +467,7 @@ fun FileBrowserScreen(
                             FileItem(
                                 modifier = Modifier.animateItem(),
                                 file = file,
-                                thumbnailFile = remember(file.path, uiState.offlineFolder) { offlineThumbnailFile(uiState.offlineFolder, file) },
+                                thumbnailFile = offlineThumbnailFile(uiState.offlineCopies[file.path], file),
                                 onClick = {
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
@@ -969,15 +968,13 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 /**
- * Returns the offline copy of a remote image/audio/video file if one exists (so a thumbnail can be
- * shown), else null. Only images, audio, and video qualify; everything else keeps its icon.
+ * The offline copy to draw a remote image/audio/video file's thumbnail from, if it has one. Only
+ * images, audio, and video qualify; everything else keeps its icon.
  */
-private fun offlineThumbnailFile(offlineFolder: File?, file: RemoteFile): File? {
-    if (offlineFolder == null || file.isDirectory) return null
+private fun offlineThumbnailFile(offlineCopy: File?, file: RemoteFile): File? {
+    if (offlineCopy == null) return null
     val type = getFileType(file.name)
-    if (type != FileType.IMAGE && type != FileType.AUDIO && type != FileType.VIDEO) return null
-    val offline = OfflineStore.fileIn(offlineFolder, file.path)
-    return if (offline.exists()) offline else null
+    return offlineCopy.takeIf { type == FileType.IMAGE || type == FileType.AUDIO || type == FileType.VIDEO }
 }
 
 private fun handleFileOpen(

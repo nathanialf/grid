@@ -32,10 +32,4 @@ interface FileRepository {
     suspend fun cancelTransfer(transferId: String): Result<Unit>
     suspend fun pauseTransfer(transferId: String): Result<Unit>
     suspend fun resumeTransfer(transferId: String): Result<Unit>
-
-    // Cached files management
-    fun getCachedFilesForConnection(connectionId: String): List<CachedFile>
-    fun clearCacheForConnection(connectionId: String): Boolean
-    fun deleteCachedFile(filePath: String): Boolean
-    fun getCacheSizeForConnection(connectionId: String): Long
 }

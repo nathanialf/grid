@@ -12,11 +12,16 @@ import androidx.media3.datasource.DataSourceException
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.TransferListener
+import com.defnf.grid.data.offline.OfflineFiller
 import com.defnf.grid.data.remote.pool.ConnectionPool
+import com.defnf.grid.domain.model.Connection
 import com.defnf.grid.domain.repository.ConnectionRepository
+import com.defnf.grid.util.GridLog
 import kotlinx.coroutines.runBlocking
 import java.io.IOException
 import java.io.InputStream
+import java.io.InterruptedIOException
+import java.io.RandomAccessFile
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,8 +36,9 @@ object RemoteMediaUri {
     private const val AUTHORITY = "stream"
     private const val PARAM_PATH = "path"
     private const val PARAM_SIZE = "size"
+    private const val PARAM_MODIFIED = "modified"
 
-    fun build(connectionId: String, remotePath: String, fileName: String, size: Long): Uri =
+    fun build(connectionId: String, remotePath: String, fileName: String, size: Long, modified: Long): Uri =
         Uri.Builder()
             .scheme(SCHEME)
             .authority(AUTHORITY)
@@ -41,6 +47,7 @@ object RemoteMediaUri {
             .appendPath(fileName)
             .appendQueryParameter(PARAM_PATH, remotePath)
             .appendQueryParameter(PARAM_SIZE, size.toString())
+            .appendQueryParameter(PARAM_MODIFIED, modified.toString())
             .build()
 
     fun isRemote(uri: Uri): Boolean = uri.scheme == SCHEME
@@ -52,20 +59,33 @@ object RemoteMediaUri {
         uri.getQueryParameter(PARAM_PATH) ?: throw IOException("No remote path in $uri")
 
     internal fun size(uri: Uri): Long = uri.getQueryParameter(PARAM_SIZE)?.toLongOrNull() ?: -1L
+
+    /** The server's modified time when the URI was built; 0 when unknown. */
+    internal fun modified(uri: Uri): Long = uri.getQueryParameter(PARAM_MODIFIED)?.toLongOrNull() ?: 0L
 }
 
 /**
- * Reads a `grid://` URI from the remote server through the shared [ConnectionPool], reusing the
- * already-open session the file browser was using.
+ * Reads a `grid://` URI, saving the file offline as it goes.
+ *
+ * Each open starts (or joins) the file's [OfflineFiller] fill and plays from that growing local copy,
+ * so the file comes down once. Only a seek well past what the fill has reached reads the server
+ * directly, through the shared [ConnectionPool] session the file browser was using; so does every
+ * read when the copy can't be saved (unknown size, no storage access) or the fill fails.
  */
 @OptIn(UnstableApi::class)
 class RemoteFileDataSource(
     private val pool: ConnectionPool,
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val filler: OfflineFiller
 ) : BaseDataSource(/* isNetwork = */ true) {
 
     private var uri: Uri? = null
+    private var connection: Connection? = null
+    private var remotePath: String? = null
+    private var fill: OfflineFiller.Fill? = null
+    private var local: RandomAccessFile? = null
     private var stream: InputStream? = null
+    private var position = 0L
     private var bytesRemaining = 0L
     private var opened = false
 
@@ -74,22 +94,37 @@ class RemoteFileDataSource(
         uri = target
         transferInitializing(dataSpec)
 
-        val input = try {
+        val size = RemoteMediaUri.size(target)
+        position = dataSpec.position
+        try {
             // DataSource calls happen on the player's loader thread, which may block.
-            runBlocking {
-                val connection = connectionRepository.getConnectionById(RemoteMediaUri.connectionId(target))
-                pool.openStream(connection) { client ->
-                    client.openInputStream(RemoteMediaUri.remotePath(target), dataSpec.position)
-                }
+            val resolved = runBlocking { connectionRepository.getConnectionById(RemoteMediaUri.connectionId(target)) }
+            val path = RemoteMediaUri.remotePath(target)
+            connection = resolved
+            remotePath = path
+            // Saving offline is a bonus; failing to start it must never stop playback. An interrupt
+            // is the loader cancelling this load, though, and must end it rather than go remote.
+            val joined = try {
+                runBlocking { filler.acquire(resolved, path, size, RemoteMediaUri.modified(target)) }
+            } catch (e: InterruptedException) {
+                throw e
+            } catch (e: Exception) {
+                GridLog.w(TAG, "Couldn't save $path offline", e)
+                null
             }
+            fill = joined
+            if (joined == null || position > joined.written + LOCAL_WINDOW_BYTES || !openLocal(joined)) {
+                openRemote()
+            }
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+            throw DataSourceException(InterruptedIOException(), PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         } catch (e: IOException) {
             throw DataSourceException(e, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED)
         } catch (e: Exception) {
             throw DataSourceException(e, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         }
-        stream = input
 
-        val size = RemoteMediaUri.size(target)
         bytesRemaining = when {
             dataSpec.length != C.LENGTH_UNSET.toLong() -> dataSpec.length
             size > 0 -> (size - dataSpec.position).coerceAtLeast(0L)
@@ -100,10 +135,33 @@ class RemoteFileDataSource(
         return bytesRemaining
     }
 
+    /** Opens the fill's local copy at [position]; false if it isn't there to open. */
+    private fun openLocal(fill: OfflineFiller.Fill): Boolean {
+        // The part file may be renamed into place between choosing it and opening it. Only then is
+        // the target the fill's: before that, a target on disk is the outdated copy being replaced.
+        val file = fill.readable.takeIf { it.exists() }
+            ?: fill.target.takeIf { fill.isComplete && it.exists() }
+            ?: return false
+        local = try {
+            RandomAccessFile(file, "r").apply { seek(position) }
+        } catch (e: IOException) {
+            return false
+        }
+        return true
+    }
+
+    private fun openRemote() {
+        val resolved = connection ?: throw IOException("No connection")
+        val path = remotePath ?: throw IOException("No remote path")
+        val offset = position
+        stream = runBlocking {
+            pool.openStream(resolved) { client -> client.openInputStream(path, offset) }
+        }
+    }
+
     override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
         if (length == 0) return 0
         if (bytesRemaining == 0L) return C.RESULT_END_OF_INPUT
-        val input = stream ?: throw DataSourceException(PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
 
         val toRead = if (bytesRemaining == C.LENGTH_UNSET.toLong()) {
             length
@@ -111,23 +169,66 @@ class RemoteFileDataSource(
             minOf(bytesRemaining, length.toLong()).toInt()
         }
         val read = try {
-            input.read(buffer, offset, toRead)
+            readLocal(buffer, offset, toRead) ?: readRemote(buffer, offset, toRead)
+        } catch (e: InterruptedException) {
+            // The loader interrupts a cancelled load; stop waiting on the fill.
+            Thread.currentThread().interrupt()
+            throw DataSourceException(InterruptedIOException(), PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         } catch (e: IOException) {
             throw DataSourceException(e, PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED)
         }
         if (read == -1) return C.RESULT_END_OF_INPUT
 
+        position += read
         if (bytesRemaining != C.LENGTH_UNSET.toLong()) bytesRemaining -= read
         bytesTransferred(read)
         return read
+    }
+
+    /**
+     * Reads from the local copy, waiting for the fill to get there; null once reads must go to the
+     * server instead (no local copy, or the fill stopped short of [position]).
+     */
+    private fun readLocal(buffer: ByteArray, offset: Int, length: Int): Int? {
+        val file = local ?: return null
+        val fill = fill ?: return null
+        while (true) {
+            val available = (if (fill.isComplete) fill.size else fill.written) - position
+            if (available > 0) {
+                val read = file.read(buffer, offset, minOf(available, length.toLong()).toInt())
+                if (read != -1) return read
+                // The copy is shorter than the fill reported (deleted underneath us): go remote.
+            } else if (fill.isComplete) {
+                return -1
+            }
+            if (fill.failure != null || available > 0) {
+                closeLocal()
+                openRemote()
+                return null
+            }
+            fill.awaitBeyond(position, FILL_WAIT_MS)
+        }
+    }
+
+    private fun readRemote(buffer: ByteArray, offset: Int, length: Int): Int {
+        val input = stream ?: throw DataSourceException(PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
+        return input.read(buffer, offset, length)
     }
 
     override fun getUri(): Uri? = uri
 
     override fun close() {
         uri = null
+        fill = null
+        connection = null
+        remotePath = null
         try {
-            stream?.close()
+            // Close the remote stream even if the local file fails to: it holds a pooled session.
+            try {
+                closeLocal()
+            } finally {
+                stream?.close()
+            }
         } catch (e: IOException) {
             throw DataSourceException(e, PlaybackException.ERROR_CODE_IO_UNSPECIFIED)
         } finally {
@@ -138,11 +239,29 @@ class RemoteFileDataSource(
             }
         }
     }
+
+    private fun closeLocal() {
+        try {
+            local?.close()
+        } finally {
+            local = null
+        }
+    }
+
+    private companion object {
+        const val TAG = "GridMedia"
+
+        /** How far past the fill a read may start and still wait for it rather than go remote. */
+        const val LOCAL_WINDOW_BYTES = 2L * 1024 * 1024
+
+        /** Upper bound on one wait for the fill; the loop re-checks for failure in between. */
+        const val FILL_WAIT_MS = 500L
+    }
 }
 
 /**
- * Routes `grid://` URIs to [RemoteFileDataSource] and everything else (local files of cached
- * downloads) to Media3's [DefaultDataSource].
+ * Routes `grid://` URIs to [RemoteFileDataSource] and everything else (offline copies) to
+ * Media3's [DefaultDataSource].
  */
 @OptIn(UnstableApi::class)
 private class RoutingDataSource(
@@ -195,13 +314,14 @@ private class RoutingDataSource(
 @OptIn(UnstableApi::class)
 class GridMediaDataSourceFactory @Inject constructor(
     private val pool: ConnectionPool,
-    private val connectionRepository: ConnectionRepository
+    private val connectionRepository: ConnectionRepository,
+    private val filler: OfflineFiller
 ) {
     fun create(context: Context): DataSource.Factory {
         val localFactory = DefaultDataSource.Factory(context)
         return DataSource.Factory {
             RoutingDataSource(localFactory.createDataSource()) {
-                RemoteFileDataSource(pool, connectionRepository)
+                RemoteFileDataSource(pool, connectionRepository, filler)
             }
         }
     }

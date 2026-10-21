@@ -2,7 +2,6 @@ package com.defnf.grid.data.repository
 
 import android.app.Application
 import com.defnf.grid.data.remote.pool.ConnectionPool
-import com.defnf.grid.domain.model.CachedFile
 import com.defnf.grid.domain.model.Connection
 import com.defnf.grid.domain.model.Credential
 import com.defnf.grid.domain.model.FileTransfer
@@ -232,74 +231,6 @@ class FileRepositoryImpl @Inject constructor(
         }
     }
     
-    override fun getCachedFilesForConnection(connectionId: String): List<CachedFile> {
-        // Files are cached in opened_files directory by FileBrowserViewModel
-        val cacheDir = File(application.cacheDir, "opened_files")
-        if (!cacheDir.exists()) {
-            return emptyList()
-        }
-
-        return cacheDir.listFiles()?.mapNotNull { file ->
-            // Filename format from FileBrowserViewModel: {connectionId}_{encodedPath}_{filename}
-            // .part files are downloads still in progress (or interrupted), not cached files
-            if (file.isFile && file.name.startsWith("${connectionId}_") && !file.name.endsWith(".part")) {
-                val withoutConnectionId = file.name.removePrefix("${connectionId}_")
-                // The format is: encodedPath_filename where encodedPath has / and \ replaced with _
-                // We need to find the original filename - it's after the last segment
-                val fileName = file.name.substringAfterLast("_")
-                // Reconstruct the remote path by removing connectionId prefix and filename suffix
-                val encodedPath = withoutConnectionId.removeSuffix("_$fileName")
-                val remotePath = encodedPath.replace('_', '/')
-
-                CachedFile(
-                    name = fileName,
-                    path = file.absolutePath,
-                    remotePath = remotePath,
-                    size = file.length(),
-                    cachedAt = file.lastModified(),
-                    connectionId = connectionId
-                )
-            } else null
-        }?.sortedByDescending { it.cachedAt } ?: emptyList()
-    }
-
-    override fun clearCacheForConnection(connectionId: String): Boolean {
-        val cacheDir = File(application.cacheDir, "opened_files")
-        if (!cacheDir.exists()) {
-            return true
-        }
-
-        var allDeleted = true
-        cacheDir.listFiles()?.forEach { file ->
-            if (file.name.startsWith("${connectionId}_")) {
-                if (!file.delete()) {
-                    allDeleted = false
-                }
-            }
-        }
-        return allDeleted
-    }
-
-    override fun deleteCachedFile(filePath: String): Boolean {
-        val file = File(filePath)
-        return if (file.exists()) {
-            file.delete()
-        } else {
-            true
-        }
-    }
-
-    override fun getCacheSizeForConnection(connectionId: String): Long {
-        val cacheDir = File(application.cacheDir, "opened_files")
-        if (!cacheDir.exists()) {
-            return 0L
-        }
-
-        return cacheDir.listFiles()
-            ?.filter { it.name.startsWith("${connectionId}_") }
-            ?.sumOf { it.length() } ?: 0L
-    }
-
     private fun TransferProgress.toState(): TransferState =
         if (bytesTransferred >= totalBytes) TransferState.COMPLETED else TransferState.IN_PROGRESS
 }

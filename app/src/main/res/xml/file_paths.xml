@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- Cache directory for opened files -->
-    <cache-path
-        name="opened_files"
-        path="opened_files/" />
+    <!-- Offline copies (Downloads/Grid), so they can be handed to other apps and the installer -->
+    <external-path
+        name="offline_files"
+        path="Download/Grid/" />
 </paths>

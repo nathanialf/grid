@@ -104,8 +104,15 @@ class FakeNetworkClient : NetworkClient {
         fileSize: Long
     ): Flow<TransferProgress> = emptyFlow()
 
-    override suspend fun openInputStream(remotePath: String, offset: Long): InputStream =
-        ByteArrayInputStream(ByteArray(0))
+    /** What [openInputStream] serves, by remote path; anything else reads as empty. */
+    @Volatile
+    var fileContents: Map<String, ByteArray> = emptyMap()
+
+    override suspend fun openInputStream(remotePath: String, offset: Long): InputStream {
+        val bytes = fileContents[remotePath] ?: ByteArray(0)
+        val start = offset.coerceAtMost(bytes.size.toLong()).toInt()
+        return ByteArrayInputStream(bytes, start, bytes.size - start)
+    }
 
     override fun isConnected(): Boolean = connected
 

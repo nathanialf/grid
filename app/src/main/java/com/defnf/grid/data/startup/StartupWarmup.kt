@@ -2,6 +2,7 @@ package com.defnf.grid.data.startup
 
 import com.defnf.grid.data.local.EncryptionManager
 import com.defnf.grid.data.local.PreferencesManager
+import com.defnf.grid.data.offline.OfflineStore
 import com.defnf.grid.data.remote.smb.SmbClientProvider
 import com.defnf.grid.data.remote.ssh.SshClientProvider
 import com.defnf.grid.data.remote.telemetry.ConnectTrace
@@ -32,7 +33,8 @@ class StartupWarmup @Inject constructor(
     private val sshClientProvider: SshClientProvider,
     private val smbClientProvider: SmbClientProvider,
     private val preferencesManager: PreferencesManager,
-    private val encryptionManager: EncryptionManager
+    private val encryptionManager: EncryptionManager,
+    private val offlineStore: OfflineStore
 ) {
 
     private val started = AtomicBoolean(false)
@@ -67,6 +69,9 @@ class StartupWarmup @Inject constructor(
 
             runCatching { smbClientProvider.warmUp() }
             trace.mark("smb")
+
+            // Offline copies moved to Downloads/Grid in 1.2.1; the old private cache is dead weight.
+            runCatching { offlineStore.deleteLegacyCache() }
 
             trace.note("x25519", x25519.toString())
             trace.finish("ok")

@@ -93,7 +93,7 @@ fun CachedFilesScreen(
                     }
                 },
                 actions = {
-                    if (uiState.cachedFiles.isNotEmpty()) {
+                    if (uiState.cachedFiles.isNotEmpty() || uiState.unfinishedSize > 0) {
                         IconButton(onClick = { viewModel.showClearCacheConfirmation() }) {
                             Icon(
                                 imageVector = Icons.Default.DeleteSweep,
@@ -126,6 +126,7 @@ fun CachedFilesScreen(
 
                 uiState.cachedFiles.isEmpty() -> {
                     EmptyCacheView(
+                        unfinishedSize = uiState.unfinishedSize,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -143,6 +144,7 @@ fun CachedFilesScreen(
                         CachedFilesGrid(
                             cachedFiles = uiState.cachedFiles,
                             totalSize = uiState.totalCacheSize,
+                            unfinishedSize = uiState.unfinishedSize,
                             onFileClick = onFileClick,
                             onFileDelete = onFileDelete
                         )
@@ -150,6 +152,7 @@ fun CachedFilesScreen(
                         CachedFilesList(
                             cachedFiles = uiState.cachedFiles,
                             totalSize = uiState.totalCacheSize,
+                            unfinishedSize = uiState.unfinishedSize,
                             onFileClick = onFileClick,
                             onFileDelete = onFileDelete
                         )
@@ -166,8 +169,11 @@ fun CachedFilesScreen(
             title = { Text("Clear Offline Files") },
             text = {
                 Text(
-                    "Are you sure you want to delete all ${uiState.cachedFiles.size} offline files? " +
-                            "This will free up ${Formatter.formatFileSize(context, uiState.totalCacheSize)}."
+                    "Are you sure you want to delete all ${uiState.cachedFiles.size} offline files" +
+                            (if (uiState.unfinishedSize > 0) " and unfinished saves" else "") + "? " +
+                            "This will free up " +
+                            "${Formatter.formatFileSize(context, uiState.totalCacheSize + uiState.unfinishedSize)} " +
+                            "and removes them from ${uiState.offlineLocation}."
                 )
             },
             confirmButton = {
@@ -186,8 +192,10 @@ fun CachedFilesScreen(
 
 @Composable
 private fun EmptyCacheView(
+    unfinishedSize: Long,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     Column(
         modifier = modifier.padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -211,10 +219,19 @@ private fun EmptyCacheView(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Files you open from this connection will be available offline",
+            text = "Files you open, download or play from this connection are kept in Downloads/Grid",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+
+        if (unfinishedSize > 0) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Unfinished saves: ${Formatter.formatFileSize(context, unfinishedSize)}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -222,6 +239,7 @@ private fun EmptyCacheView(
 private fun CachedFilesList(
     cachedFiles: List<CachedFile>,
     totalSize: Long,
+    unfinishedSize: Long,
     onFileClick: (CachedFile) -> Unit,
     onFileDelete: (CachedFile) -> Unit
 ) {
@@ -232,7 +250,7 @@ private fun CachedFilesList(
     ) {
         // Header with total size
         item {
-            CacheSummaryCard(fileCount = cachedFiles.size, totalSize = totalSize)
+            CacheSummaryCard(fileCount = cachedFiles.size, totalSize = totalSize, unfinishedSize = unfinishedSize)
         }
 
         items(cachedFiles, key = { it.path }) { cachedFile ->
@@ -249,6 +267,7 @@ private fun CachedFilesList(
 private fun CachedFilesGrid(
     cachedFiles: List<CachedFile>,
     totalSize: Long,
+    unfinishedSize: Long,
     onFileClick: (CachedFile) -> Unit,
     onFileDelete: (CachedFile) -> Unit
 ) {
@@ -261,7 +280,7 @@ private fun CachedFilesGrid(
     ) {
         // Header spans the full row width.
         item(span = { GridItemSpan(maxLineSpan) }) {
-            CacheSummaryCard(fileCount = cachedFiles.size, totalSize = totalSize)
+            CacheSummaryCard(fileCount = cachedFiles.size, totalSize = totalSize, unfinishedSize = unfinishedSize)
         }
 
         items(cachedFiles, key = { it.path }) { cachedFile ->
@@ -275,7 +294,7 @@ private fun CachedFilesGrid(
 }
 
 @Composable
-private fun CacheSummaryCard(fileCount: Int, totalSize: Long) {
+private fun CacheSummaryCard(fileCount: Int, totalSize: Long, unfinishedSize: Long) {
     val context = LocalContext.current
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -297,7 +316,12 @@ private fun CacheSummaryCard(fileCount: Int, totalSize: Long) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
                 Text(
-                    text = "Total size: ${Formatter.formatFileSize(context, totalSize)}",
+                    text = "Total size: ${Formatter.formatFileSize(context, totalSize)}" +
+                        if (unfinishedSize > 0) {
+                            ", plus ${Formatter.formatFileSize(context, unfinishedSize)} in unfinished saves"
+                        } else {
+                            ""
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
@@ -417,7 +441,7 @@ private fun CachedFileGridItem(
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
             title = { Text("Delete Offline File") },
-            text = { Text("Delete \"${cachedFile.name}\" from offline storage?") },
+            text = { Text("Delete \"${cachedFile.name}\"? This removes it from Downloads/Grid on this device.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -520,7 +544,7 @@ private fun CachedFileItem(
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
             title = { Text("Delete Offline File") },
-            text = { Text("Delete \"${cachedFile.name}\" from offline storage?") },
+            text = { Text("Delete \"${cachedFile.name}\"? This removes it from Downloads/Grid on this device.") },
             confirmButton = {
                 TextButton(
                     onClick = {

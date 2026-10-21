@@ -47,6 +47,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.DpOffset
 import com.defnf.grid.domain.model.RemoteFile
+import androidx.core.content.ContextCompat
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import com.defnf.grid.presentation.theme.GridTheme
 import com.defnf.grid.presentation.components.WavyCircularProgressIndicator
 import com.defnf.grid.presentation.components.ErrorView
@@ -123,6 +127,20 @@ fun FileBrowserScreen(
     
     LaunchedEffect(connectionId) {
         viewModel.initialize(connectionId)
+    }
+
+    // Offline copies live in Downloads, which Android 10 and below only let apps write with
+    // storage access. Without it, opening a file reports the write failure.
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
     }
     
 
@@ -385,26 +403,10 @@ fun FileBrowserScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Show parent directory if not at root
-                        if (uiState.currentPath != "/" && uiState.currentPath.isNotEmpty()) {
+                        // Show the parent directory unless this is the connection's root
+                        if (uiState.canNavigateUp) {
                             item {
-                                ParentDirectoryGridItem(
-                                    onNavigateUp = {
-                                        val parentPath = if (uiState.protocol == "SMB") {
-                                            // Handle SMB paths with backslashes
-                                            if (uiState.currentPath.contains("\\")) {
-                                                uiState.currentPath.substringBeforeLast("\\")
-                                            } else {
-                                                "" // Go to share root if no backslashes
-                                            }
-                                        } else {
-                                            // Handle FTP/SFTP paths with forward slashes
-                                            uiState.currentPath.substringBeforeLast("/")
-                                                .takeIf { it.isNotEmpty() } ?: "/"
-                                        }
-                                        viewModel.navigateToDirectory(parentPath)
-                                    }
-                                )
+                                ParentDirectoryGridItem(onNavigateUp = { viewModel.navigateUp() })
                             }
                         }
                         
@@ -416,7 +418,7 @@ fun FileBrowserScreen(
                             FileGridItem(
                                 modifier = Modifier.animateItem(),
                                 file = file,
-                                thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
+                                thumbnailFile = offlineThumbnailFile(uiState.offlineCopies[file.path], file),
                                 onClick = {
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
@@ -432,8 +434,10 @@ fun FileBrowserScreen(
                                 onLongPress = { 
                                     viewModel.enterSelectionModeWithFile(file.path) 
                                 },
-                                isDownloading = uiState.downloadingFiles.contains(file.path),
-                                downloadProgress = uiState.downloadProgress[file.path] ?: 0f
+                                isDownloading = uiState.downloadingFiles.contains(file.path) ||
+                                    uiState.fillProgress.containsKey(file.path),
+                                downloadProgress = uiState.downloadProgress[file.path]
+                                    ?: uiState.fillProgress[file.path] ?: 0f
                             )
                         }
                     }
@@ -448,26 +452,10 @@ fun FileBrowserScreen(
                             ),
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                        // Show parent directory if not at root
-                        if (uiState.currentPath != "/" && uiState.currentPath.isNotEmpty()) {
+                        // Show the parent directory unless this is the connection's root
+                        if (uiState.canNavigateUp) {
                             item {
-                                ParentDirectoryItem(
-                                    onNavigateUp = {
-                                        val parentPath = if (uiState.protocol == "SMB") {
-                                            // Handle SMB paths with backslashes
-                                            if (uiState.currentPath.contains("\\")) {
-                                                uiState.currentPath.substringBeforeLast("\\")
-                                            } else {
-                                                "" // Go to share root if no backslashes
-                                            }
-                                        } else {
-                                            // Handle FTP/SFTP paths with forward slashes
-                                            uiState.currentPath.substringBeforeLast("/")
-                                                .takeIf { it.isNotEmpty() } ?: "/"
-                                        }
-                                        viewModel.navigateToDirectory(parentPath)
-                                    }
-                                )
+                                ParentDirectoryItem(onNavigateUp = { viewModel.navigateUp() })
                             }
                         }
                         
@@ -479,7 +467,7 @@ fun FileBrowserScreen(
                             FileItem(
                                 modifier = Modifier.animateItem(),
                                 file = file,
-                                thumbnailFile = remember(file.path) { cachedThumbnailFile(context, connectionId, file) },
+                                thumbnailFile = offlineThumbnailFile(uiState.offlineCopies[file.path], file),
                                 onClick = {
                                     if (file.isDirectory) {
                                         viewModel.navigateToDirectory(file.path)
@@ -495,8 +483,10 @@ fun FileBrowserScreen(
                                 onLongPress = { 
                                     viewModel.enterSelectionModeWithFile(file.path) 
                                 },
-                                isDownloading = uiState.downloadingFiles.contains(file.path),
-                                downloadProgress = uiState.downloadProgress[file.path] ?: 0f
+                                isDownloading = uiState.downloadingFiles.contains(file.path) ||
+                                    uiState.fillProgress.containsKey(file.path),
+                                downloadProgress = uiState.downloadProgress[file.path]
+                                    ?: uiState.fillProgress[file.path] ?: 0f
                             )
                         }
                     }
@@ -978,23 +968,13 @@ private fun formatFileSize(bytes: Long): String {
 }
 
 /**
- * Returns the local cache File for a remote image/audio/video file if it has already been
- * downloaded (so a thumbnail can be shown), else null. Mirrors the cache naming used when files
- * are opened in [FileBrowserViewModel] (`{connectionId}_{encodedPath}_{name}` under
- * cacheDir/opened_files). Only images, audio, and video qualify; everything else keeps its icon.
+ * The offline copy to draw a remote image/audio/video file's thumbnail from, if it has one. Only
+ * images, audio, and video qualify; everything else keeps its icon.
  */
-private fun cachedThumbnailFile(
-    context: android.content.Context,
-    connectionId: String,
-    file: RemoteFile
-): File? {
-    if (file.isDirectory) return null
+private fun offlineThumbnailFile(offlineCopy: File?, file: RemoteFile): File? {
+    if (offlineCopy == null) return null
     val type = getFileType(file.name)
-    if (type != FileType.IMAGE && type != FileType.AUDIO && type != FileType.VIDEO) return null
-    val cacheDir = File(context.cacheDir, "opened_files")
-    val cacheFileName = "${connectionId}_${file.path.replace('/', '_').replace('\\', '_')}_${file.name}"
-    val cached = File(cacheDir, cacheFileName)
-    return if (cached.exists()) cached else null
+    return offlineCopy.takeIf { type == FileType.IMAGE || type == FileType.AUDIO || type == FileType.VIDEO }
 }
 
 private fun handleFileOpen(

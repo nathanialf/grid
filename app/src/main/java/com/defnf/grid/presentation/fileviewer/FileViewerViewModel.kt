@@ -1,12 +1,15 @@
 package com.defnf.grid.presentation.fileviewer
 
+import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.defnf.grid.domain.usecase.connection.GetConnectionUseCase
 import com.defnf.grid.domain.usecase.file.CreateDirectoryUseCase
 import com.defnf.grid.domain.usecase.file.UploadFileUseCase
@@ -28,6 +31,7 @@ data class FileViewerUiState(
 
 @HiltViewModel
 class FileViewerViewModel @Inject constructor(
+    private val application: Application,
     private val uploadFileUseCase: UploadFileUseCase,
     private val createDirectoryUseCase: CreateDirectoryUseCase,
     private val getConnectionUseCase: GetConnectionUseCase
@@ -88,11 +92,13 @@ class FileViewerViewModel @Inject constructor(
         connectionId: String?,
         remotePath: String?
     ) {
+        // Extracted files only pass through on their way to the server, so they go to a scratch
+        // folder rather than into the archive's offline folder, and are gone afterwards.
+        val extractDir = File(application.cacheDir, "extract/${java.util.UUID.randomUUID()}/${file.nameWithoutExtension}")
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isExtracting = true)
                 
-                val extractDir = File(file.parent, file.nameWithoutExtension)
                 val archiveExtractor = ArchiveExtractor()
                 
                 archiveExtractor.extractArchive(file, extractDir).collect { progress ->
@@ -119,6 +125,10 @@ class FileViewerViewModel @Inject constructor(
                     isExtracting = false,
                     extractionProgress = null
                 )
+            } finally {
+                withContext(NonCancellable + kotlinx.coroutines.Dispatchers.IO) {
+                    extractDir.parentFile?.deleteRecursively()
+                }
             }
         }
     }

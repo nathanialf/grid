@@ -93,7 +93,7 @@ private fun openWithAnotherApp(context: Context, file: File, displayName: String
     } catch (e: ActivityNotFoundException) {
         Toast.makeText(context, "No app can open this file", Toast.LENGTH_SHORT).show()
     } catch (e: IllegalArgumentException) {
-        // The file isn't under a FileProvider path (e.g. not in the opened-files cache)
+        // The file isn't under a FileProvider path (e.g. not in Downloads/Grid)
         Toast.makeText(context, "This file can't be shared", Toast.LENGTH_SHORT).show()
     }
 }

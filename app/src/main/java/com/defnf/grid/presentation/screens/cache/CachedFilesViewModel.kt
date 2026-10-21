@@ -70,7 +70,13 @@ class CachedFilesViewModel @Inject constructor(
         val connection = connection ?: return
         val folder = offlineFolder ?: return
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            // Keep a list that is already showing on screen while it reloads (e.g. after a
+            // delete): swapping it for the spinner would lose the scroll position and leave
+            // the collapsing app bar collapsed over a list reset to the top.
+            _uiState.value = _uiState.value.copy(
+                isLoading = _uiState.value.cachedFiles.isEmpty(),
+                error = null
+            )
 
             try {
                 val files = withContext(Dispatchers.IO) { offlineStore.list(folder, connection) }

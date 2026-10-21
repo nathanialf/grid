@@ -457,10 +457,7 @@ private fun ConnectionCard(
                     modifier = Modifier.size(ButtonDefaults.IconSize)
                 )
                 Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-                Text(
-                    text = "Offline files",
-                    style = MaterialTheme.typography.labelLarge
-                )
+                Text("Offline files")
             }
         }
     }

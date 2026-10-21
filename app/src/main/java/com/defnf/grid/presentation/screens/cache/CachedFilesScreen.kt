@@ -17,8 +17,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -164,16 +166,18 @@ fun CachedFilesScreen(
             icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
             title = { Text("Clear offline files?") },
             text = {
+                val count = uiState.cachedFiles.size
+                val files = if (count == 1) "the 1 offline file" else "all $count offline files"
                 val what = when {
-                    uiState.cachedFiles.isEmpty() -> "all unfinished saves"
-                    uiState.unfinishedSize > 0 -> "all ${uiState.cachedFiles.size} offline files and unfinished saves"
-                    else -> "all ${uiState.cachedFiles.size} offline files"
+                    count == 0 -> "all unfinished saves"
+                    uiState.unfinishedSize > 0 -> "$files and unfinished saves"
+                    else -> files
                 }
                 Text(
                     "Are you sure you want to delete $what? " +
                             "This will free up " +
                             "${Formatter.formatFileSize(context, uiState.totalCacheSize + uiState.unfinishedSize)} " +
-                            "and removes them from ${uiState.offlineLocation}."
+                            "and remove them from ${uiState.offlineLocation}."
                 )
             },
             confirmButton = {
@@ -203,50 +207,55 @@ private fun EmptyCacheView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    Column(
-        modifier = modifier.padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        ShapedIcon(
-            imageVector = Icons.Default.CloudOff,
-            shape = MaterialShapes.Cookie9Sided.toShape(),
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.size(128.dp),
-            iconSize = 56.dp
-        )
+    // Centred when it fits, scrollable when it doesn't (landscape, large font): the clear button
+    // is the only way to reach unfinished saves here, and scrolling also collapses the app bar.
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            ShapedIcon(
+                imageVector = Icons.Default.CloudOff,
+                shape = MaterialShapes.Cookie9Sided.toShape(),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(128.dp),
+                iconSize = 56.dp
+            )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Text(
-            text = "No offline files",
-            style = MaterialTheme.typography.headlineMediumEmphasized,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Files you open, download or play from this connection are kept in Downloads/Grid",
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        if (unfinishedSize > 0) {
             Spacer(modifier = Modifier.height(24.dp))
-            FilledTonalButton(
-                onClick = onClear,
-                shapes = ButtonDefaults.shapes()
-            ) {
-                Icon(
-                    imageVector = Icons.Default.DeleteSweep,
-                    contentDescription = null,
-                    modifier = Modifier.size(ButtonDefaults.IconSize)
-                )
-                Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
-                Text("Clear ${Formatter.formatFileSize(context, unfinishedSize)} of unfinished saves")
+
+            Text(
+                text = "No offline files",
+                style = MaterialTheme.typography.headlineMediumEmphasized,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Files you open, download or play from this connection are kept in Downloads/Grid",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            if (unfinishedSize > 0) {
+                Spacer(modifier = Modifier.height(24.dp))
+                FilledTonalButton(
+                    onClick = onClear,
+                    shapes = ButtonDefaults.shapes()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                    )
+                    Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Clear ${Formatter.formatFileSize(context, unfinishedSize)} of unfinished saves")
+                }
             }
         }
     }
@@ -474,14 +483,7 @@ private fun CachedFileGridItem(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    ShapedIcon(
-                        imageVector = getFileIcon(cachedFile.name),
-                        shape = MaterialShapes.Cookie4Sided.toShape(),
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.size(56.dp),
-                        iconSize = 28.dp
-                    )
+                    FileTypeIcon(cachedFile.name)
                     Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = cachedFile.name,
@@ -556,14 +558,7 @@ private fun CachedFileItem(
                         .clip(MaterialTheme.shapes.large)
                 )
             } else {
-                ShapedIcon(
-                    imageVector = getFileIcon(cachedFile.name),
-                    shape = MaterialShapes.Cookie4Sided.toShape(),
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                    modifier = Modifier.size(56.dp),
-                    iconSize = 28.dp
-                )
+                FileTypeIcon(cachedFile.name)
             }
         },
         supportingContent = {
@@ -635,6 +630,19 @@ private fun ShapedIcon(
             modifier = Modifier.size(iconSize)
         )
     }
+}
+
+/** The file-type icon shown for an offline file that has no real thumbnail. */
+@Composable
+private fun FileTypeIcon(fileName: String) {
+    ShapedIcon(
+        imageVector = getFileIcon(fileName),
+        shape = MaterialShapes.Cookie4Sided.toShape(),
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.size(56.dp),
+        iconSize = 28.dp
+    )
 }
 
 @Composable

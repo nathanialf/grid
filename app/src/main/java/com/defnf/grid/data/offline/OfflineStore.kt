@@ -59,6 +59,18 @@ class OfflineStore @Inject constructor(
         return if (collides) unlistedFileFor(connection, remotePath) else fileIn(folder, remotePath, connection.protocol)
     }
 
+    /**
+     * The copy of [remotePath] already on disk, if there is one. Unlike [fileFor] this never claims
+     * a folder, so looking a file up for another app leaves no trace in Downloads. Blocking disk work.
+     */
+    fun existingCopyOf(connection: Connection, remotePath: String): File? {
+        val segments = segmentsOf(remotePath, connection.protocol)
+        val listed = markedFolder(root, connection.id)
+            ?.takeUnless { connection.protocol == Protocol.SFTP && hasCaseCollision(it, segments) }
+            ?.let { fileIn(it, remotePath, connection.protocol) }
+        return listOfNotNull(listed, unlistedFileFor(connection, remotePath)).firstOrNull { it.isFile }
+    }
+
     /** The private, unlisted fallback copy of [remotePath]; the OS may purge it when space is low. */
     fun unlistedFileFor(connection: Connection, remotePath: String): File =
         fileIn(File(application.cacheDir, "unlisted/${connection.id}"), remotePath, connection.protocol)

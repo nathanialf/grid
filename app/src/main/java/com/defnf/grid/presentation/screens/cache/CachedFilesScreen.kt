@@ -1,22 +1,31 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
 
 package com.defnf.grid.presentation.screens.cache
 
 import android.text.format.Formatter
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -26,14 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.domain.model.CachedFile
-import com.defnf.grid.presentation.components.FileThumbnail
 import com.defnf.grid.presentation.components.FileThumbnailFill
 import com.defnf.grid.presentation.components.hasThumbnail
-import com.defnf.grid.presentation.components.WavyCircularProgressIndicator
+import com.defnf.grid.presentation.util.getFileIcon
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -47,6 +56,7 @@ fun CachedFilesScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     LaunchedEffect(connectionId) {
         viewModel.initialize(connectionId)
@@ -67,41 +77,28 @@ fun CachedFilesScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = "Offline Files",
-                            fontWeight = FontWeight.Bold
-                        )
-                        if (uiState.connectionName.isNotEmpty()) {
-                            Text(
-                                text = uiState.connectionName,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+            // Expressive flexible app bar: a large title that collapses as the list scrolls
+            LargeFlexibleTopAppBar(
+                title = { Text("Offline files") },
+                subtitle = if (uiState.connectionName.isNotEmpty()) {
+                    { Text(uiState.connectionName) }
+                } else {
+                    null
                 },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        shapes = IconButtonDefaults.shapes()
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
                 },
-                actions = {
-                    if (uiState.cachedFiles.isNotEmpty() || uiState.unfinishedSize > 0) {
-                        IconButton(onClick = { viewModel.showClearCacheConfirmation() }) {
-                            Icon(
-                                imageVector = Icons.Default.DeleteSweep,
-                                contentDescription = "Clear all cache"
-                            )
-                        }
-                    }
-                }
+                scrollBehavior = scrollBehavior
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -113,20 +110,17 @@ fun CachedFilesScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        WavyCircularProgressIndicator(
-                            modifier = Modifier.size(48.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
+                    LoadingIndicator(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(64.dp)
+                    )
                 }
 
                 uiState.cachedFiles.isEmpty() -> {
                     EmptyCacheView(
                         unfinishedSize = uiState.unfinishedSize,
+                        onClear = { viewModel.showClearCacheConfirmation() },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -140,13 +134,15 @@ fun CachedFilesScreen(
                     val onFileDelete: (CachedFile) -> Unit = { cachedFile ->
                         viewModel.deleteCachedFile(cachedFile)
                     }
+                    val onClearAll = { viewModel.showClearCacheConfirmation() }
                     if (uiState.viewMode == "grid") {
                         CachedFilesGrid(
                             cachedFiles = uiState.cachedFiles,
                             totalSize = uiState.totalCacheSize,
                             unfinishedSize = uiState.unfinishedSize,
                             onFileClick = onFileClick,
-                            onFileDelete = onFileDelete
+                            onFileDelete = onFileDelete,
+                            onClearAll = onClearAll
                         )
                     } else {
                         CachedFilesList(
@@ -154,7 +150,8 @@ fun CachedFilesScreen(
                             totalSize = uiState.totalCacheSize,
                             unfinishedSize = uiState.unfinishedSize,
                             onFileClick = onFileClick,
-                            onFileDelete = onFileDelete
+                            onFileDelete = onFileDelete,
+                            onClearAll = onClearAll
                         )
                     }
                 }
@@ -166,23 +163,36 @@ fun CachedFilesScreen(
     if (uiState.showClearCacheConfirmation) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissClearCacheConfirmation() },
-            title = { Text("Clear Offline Files") },
+            icon = { Icon(Icons.Default.DeleteSweep, contentDescription = null) },
+            title = { Text("Clear offline files?") },
             text = {
+                val count = uiState.cachedFiles.size
+                val files = if (count == 1) "the 1 offline file" else "all $count offline files"
+                val what = when {
+                    count == 0 -> "all unfinished saves"
+                    uiState.unfinishedSize > 0 -> "$files and unfinished saves"
+                    else -> files
+                }
                 Text(
-                    "Are you sure you want to delete all ${uiState.cachedFiles.size} offline files" +
-                            (if (uiState.unfinishedSize > 0) " and unfinished saves" else "") + "? " +
+                    "Are you sure you want to delete $what? " +
                             "This will free up " +
                             "${Formatter.formatFileSize(context, uiState.totalCacheSize + uiState.unfinishedSize)} " +
-                            "and removes them from ${uiState.offlineLocation}."
+                            "and remove them from ${uiState.offlineLocation}."
                 )
             },
             confirmButton = {
-                TextButton(onClick = { viewModel.confirmClearCache() }) {
+                TextButton(
+                    onClick = { viewModel.confirmClearCache() },
+                    shapes = ButtonDefaults.shapes()
+                ) {
                     Text("Clear")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { viewModel.dismissClearCacheConfirmation() }) {
+                TextButton(
+                    onClick = { viewModel.dismissClearCacheConfirmation() },
+                    shapes = ButtonDefaults.shapes()
+                ) {
                     Text("Cancel")
                 }
             }
@@ -193,44 +203,60 @@ fun CachedFilesScreen(
 @Composable
 private fun EmptyCacheView(
     unfinishedSize: Long,
+    onClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    Column(
-        modifier = modifier.padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.FolderOff,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "No offline files",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Files you open, download or play from this connection are kept in Downloads/Grid",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        if (unfinishedSize > 0) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "Unfinished saves: ${Formatter.formatFileSize(context, unfinishedSize)}",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+    // Centred when it fits, scrollable when it doesn't (landscape, large font): the clear button
+    // is the only way to reach unfinished saves here, and scrolling also collapses the app bar.
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(32.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            ShapedIcon(
+                imageVector = Icons.Default.CloudOff,
+                shape = MaterialShapes.Cookie9Sided.toShape(),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(128.dp),
+                iconSize = 56.dp
             )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "No offline files",
+                style = MaterialTheme.typography.headlineMediumEmphasized,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Files you open, download or play from this connection are kept in Downloads/Grid",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            if (unfinishedSize > 0) {
+                Spacer(modifier = Modifier.height(24.dp))
+                FilledTonalButton(
+                    onClick = onClear,
+                    shapes = ButtonDefaults.shapes()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                    )
+                    Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Clear ${Formatter.formatShortFileSize(context, unfinishedSize)} of unfinished saves")
+                }
+            }
         }
     }
 }
@@ -241,21 +267,29 @@ private fun CachedFilesList(
     totalSize: Long,
     unfinishedSize: Long,
     onFileClick: (CachedFile) -> Unit,
-    onFileDelete: (CachedFile) -> Unit
+    onFileDelete: (CachedFile) -> Unit,
+    onClearAll: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
     ) {
-        // Header with total size
         item {
-            CacheSummaryCard(fileCount = cachedFiles.size, totalSize = totalSize, unfinishedSize = unfinishedSize)
+            CacheSummaryCard(
+                fileCount = cachedFiles.size,
+                totalSize = totalSize,
+                unfinishedSize = unfinishedSize,
+                onClearAll = onClearAll,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
         }
 
-        items(cachedFiles, key = { it.path }) { cachedFile ->
+        // One segmented group: rounded outer corners, tight inner seams
+        itemsIndexed(cachedFiles, key = { _, file -> file.path }) { index, cachedFile ->
             CachedFileItem(
                 cachedFile = cachedFile,
+                shapes = ListItemDefaults.segmentedShapes(index = index, count = cachedFiles.size),
                 onClick = { onFileClick(cachedFile) },
                 onDelete = { onFileDelete(cachedFile) }
             )
@@ -269,18 +303,25 @@ private fun CachedFilesGrid(
     totalSize: Long,
     unfinishedSize: Long,
     onFileClick: (CachedFile) -> Unit,
-    onFileDelete: (CachedFile) -> Unit
+    onFileDelete: (CachedFile) -> Unit,
+    onClearAll: () -> Unit
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 150.dp),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Header spans the full row width.
         item(span = { GridItemSpan(maxLineSpan) }) {
-            CacheSummaryCard(fileCount = cachedFiles.size, totalSize = totalSize, unfinishedSize = unfinishedSize)
+            CacheSummaryCard(
+                fileCount = cachedFiles.size,
+                totalSize = totalSize,
+                unfinishedSize = unfinishedSize,
+                onClearAll = onClearAll,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
         }
 
         items(cachedFiles, key = { it.path }) { cachedFile ->
@@ -294,43 +335,79 @@ private fun CachedFilesGrid(
 }
 
 @Composable
-private fun CacheSummaryCard(fileCount: Int, totalSize: Long, unfinishedSize: Long) {
+private fun CacheSummaryCard(
+    fileCount: Int,
+    totalSize: Long,
+    unfinishedSize: Long,
+    onClearAll: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "$fileCount files available offline",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+        Column(modifier = Modifier.padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShapedIcon(
+                    imageVector = Icons.Default.OfflinePin,
+                    shape = MaterialShapes.Cookie9Sided.toShape(),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(64.dp),
+                    iconSize = 32.dp
                 )
-                Text(
-                    text = "Total size: ${Formatter.formatFileSize(context, totalSize)}" +
-                        if (unfinishedSize > 0) {
-                            ", plus ${Formatter.formatFileSize(context, unfinishedSize)} in unfinished saves"
-                        } else {
-                            ""
-                        },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column {
+                    Text(
+                        text = Formatter.formatShortFileSize(context, totalSize),
+                        style = MaterialTheme.typography.headlineLargeEmphasized
+                    )
+                    Text(
+                        text = "$fileCount ${if (fileCount == 1) "file" else "files"} available offline",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
-            Icon(
-                imageVector = Icons.Default.Storage,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (unfinishedSize > 0) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.5f)
+                    ) {
+                        Text(
+                            text = "+${Formatter.formatShortFileSize(context, unfinishedSize)} unfinished",
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                Button(
+                    onClick = onClearAll,
+                    shapes = ButtonDefaults.shapes()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteSweep,
+                        contentDescription = null,
+                        modifier = Modifier.size(ButtonDefaults.IconSize)
+                    )
+                    Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Clear all")
+                }
+            }
         }
     }
 }
@@ -346,11 +423,25 @@ private fun CachedFileGridItem(
     val localFile = remember(cachedFile.path) { File(cachedFile.path) }
     val showFullThumbnail = hasThumbnail(cachedFile.name, isDirectory = false, localFile = localFile)
 
+    // Expressive press feedback: the tile's corners tighten while held and spring back
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val corner by animateDpAsState(
+        targetValue = if (pressed) 12.dp else 24.dp,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "GridTileCorner"
+    )
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1.5f),
-        onClick = onClick
+            .aspectRatio(1f),
+        shape = RoundedCornerShape(corner),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        onClick = onClick,
+        interactionSource = interactionSource
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (showFullThumbnail) {
@@ -369,19 +460,18 @@ private fun CachedFileGridItem(
                                 colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
                             )
                         )
-                        .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp)
+                        .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 12.dp)
                 ) {
                     Text(
                         text = cachedFile.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.titleSmall,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = Color.White
                     )
                     Text(
-                        text = Formatter.formatFileSize(context, cachedFile.size),
-                        style = MaterialTheme.typography.bodySmall,
+                        text = Formatter.formatShortFileSize(context, cachedFile.size),
+                        style = MaterialTheme.typography.labelMedium,
                         color = Color.White.copy(alpha = 0.85f)
                     )
                 }
@@ -393,44 +483,39 @@ private fun CachedFileGridItem(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
-                    FileThumbnail(
-                        fileName = cachedFile.name,
-                        isDirectory = false,
-                        localFile = localFile,
-                        size = 48.dp,
-                        folderTint = MaterialTheme.colorScheme.primary,
-                        fileTint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
+                    FileTypeIcon(cachedFile.name)
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = cachedFile.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.titleSmall,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = Formatter.formatFileSize(context, cachedFile.size),
-                        style = MaterialTheme.typography.bodySmall,
+                        text = Formatter.formatShortFileSize(context, cachedFile.size),
+                        style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            IconButton(
+            FilledTonalIconButton(
                 onClick = { showDeleteConfirmation = true },
+                shapes = IconButtonDefaults.shapes(),
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.85f),
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .size(32.dp)
-                    .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+                    .padding(6.dp)
+                    .size(36.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Delete",
-                    tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -438,25 +523,13 @@ private fun CachedFileGridItem(
     }
 
     if (showDeleteConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text("Delete Offline File") },
-            text = { Text("Delete \"${cachedFile.name}\"? This removes it from Downloads/Grid on this device.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirmation = false
-                        onDelete()
-                    }
-                ) {
-                    Text("Delete")
-                }
+        DeleteOfflineFileDialog(
+            fileName = cachedFile.name,
+            onConfirm = {
+                showDeleteConfirmation = false
+                onDelete()
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmation = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showDeleteConfirmation = false }
         )
     }
 }
@@ -464,104 +537,141 @@ private fun CachedFileGridItem(
 @Composable
 private fun CachedFileItem(
     cachedFile: CachedFile,
+    shapes: ListItemShapes,
     onClick: () -> Unit,
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    val localFile = remember(cachedFile.path) { File(cachedFile.path) }
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                modifier = Modifier.weight(1f),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                FileThumbnail(
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = shapes,
+        // The default segmented container is Surface, invisible on the Scaffold's Surface
+        // background; a container tone makes the grouped shape read
+        colors = ListItemDefaults.segmentedColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        leadingContent = {
+            if (hasThumbnail(cachedFile.name, isDirectory = false, localFile = localFile)) {
+                FileThumbnailFill(
                     fileName = cachedFile.name,
-                    isDirectory = false,
-                    localFile = File(cachedFile.path),
-                    size = 40.dp,
-                    folderTint = MaterialTheme.colorScheme.primary,
-                    fileTint = MaterialTheme.colorScheme.primary
+                    localFile = localFile,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(MaterialTheme.shapes.large)
                 )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = cachedFile.name,
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Text(
-                        text = cachedFile.remotePath.substringBeforeLast('/') + "/",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = Formatter.formatFileSize(context, cachedFile.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = formatDate(cachedFile.cachedAt),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+            } else {
+                FileTypeIcon(cachedFile.name)
             }
-
-            IconButton(onClick = { showDeleteConfirmation = true }) {
+        },
+        supportingContent = {
+            Column {
+                Text(
+                    text = cachedFile.remotePath.substringBeforeLast('/') + "/",
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = Formatter.formatShortFileSize(context, cachedFile.size) +
+                        " · " + formatDate(cachedFile.cachedAt),
+                    maxLines = 1
+                )
+            }
+        },
+        trailingContent = {
+            IconButton(
+                onClick = { showDeleteConfirmation = true },
+                shapes = IconButtonDefaults.shapes()
+            ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.error
+                    contentDescription = "Delete"
                 )
             }
         }
+    ) {
+        Text(
+            text = cachedFile.name,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 
     if (showDeleteConfirmation) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirmation = false },
-            title = { Text("Delete Offline File") },
-            text = { Text("Delete \"${cachedFile.name}\"? This removes it from Downloads/Grid on this device.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirmation = false
-                        onDelete()
-                    }
-                ) {
-                    Text("Delete")
-                }
+        DeleteOfflineFileDialog(
+            fileName = cachedFile.name,
+            onConfirm = {
+                showDeleteConfirmation = false
+                onDelete()
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirmation = false }) {
-                    Text("Cancel")
-                }
-            }
+            onDismiss = { showDeleteConfirmation = false }
         )
     }
+}
+
+/** An icon centred in a filled container clipped to one of the Material 3 Expressive shapes. */
+@Composable
+private fun ShapedIcon(
+    imageVector: androidx.compose.ui.graphics.vector.ImageVector,
+    shape: Shape,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    iconSize: androidx.compose.ui.unit.Dp = 24.dp
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(containerColor),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = imageVector,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier.size(iconSize)
+        )
+    }
+}
+
+/** The file-type icon shown for an offline file that has no real thumbnail. */
+@Composable
+private fun FileTypeIcon(fileName: String) {
+    ShapedIcon(
+        imageVector = getFileIcon(fileName),
+        shape = MaterialShapes.Cookie4Sided.toShape(),
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        modifier = Modifier.size(56.dp),
+        iconSize = 28.dp
+    )
+}
+
+@Composable
+private fun DeleteOfflineFileDialog(
+    fileName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+        title = { Text("Delete offline file?") },
+        text = { Text("Delete \"$fileName\"? This removes it from Downloads/Grid on this device.") },
+        confirmButton = {
+            TextButton(onClick = onConfirm, shapes = ButtonDefaults.shapes()) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, shapes = ButtonDefaults.shapes()) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 private fun formatDate(timestamp: Long): String {

@@ -1,4 +1,4 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 
 package com.defnf.grid.presentation.screens.connections
 
@@ -443,17 +443,21 @@ private fun ConnectionCard(
             
             Spacer(modifier = Modifier.height(12.dp))
 
-            OutlinedButton(
+            // Expressive tonal button: a pill at rest that squares off while pressed
+            FilledTonalButton(
                 onClick = onViewCachedFiles,
-                modifier = Modifier.fillMaxWidth()
+                shapes = ButtonDefaults.shapes(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.OfflinePin,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(ButtonDefaults.IconSize)
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Offline Files")
+                Spacer(modifier = Modifier.width(ButtonDefaults.IconSpacing))
+                Text("Offline files")
             }
         }
     }

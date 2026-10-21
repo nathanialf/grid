@@ -12,6 +12,8 @@ import com.defnf.grid.domain.model.TransferProgress
 import com.defnf.grid.domain.model.TransferState
 import com.defnf.grid.domain.repository.FileRepository
 import com.defnf.grid.data.remote.ssh.HostKeyVerifier
+import com.defnf.grid.data.offline.OfflineFiller
+import com.defnf.grid.data.offline.OfflineStore
 import com.defnf.grid.domain.usecase.connection.GetConnectionUseCase
 import com.defnf.grid.domain.usecase.file.CreateDirectoryUseCase
 import com.defnf.grid.domain.usecase.file.DeleteFileUseCase
@@ -84,6 +86,8 @@ class FileBrowserViewModelTest {
             getSettingsUseCase = mockk<GetSettingsUseCase>(relaxed = true),
             fileRepository = mockk<FileRepository>(relaxed = true),
             hostKeyVerifier = mockk<HostKeyVerifier>(relaxed = true),
+            offlineStore = mockk<OfflineStore>(relaxed = true),
+            offlineFiller = mockk<OfflineFiller>(relaxed = true),
             // File I/O runs on the injected dispatcher; keep it on the test scheduler so
             // advanceUntilIdle() covers it.
             ioDispatcher = mainDispatcherRule.testDispatcher,

@@ -5,9 +5,11 @@ import android.content.Intent
 import androidx.lifecycle.ViewModel
 import com.defnf.grid.presentation.fileviewer.FileViewerActivity
 import androidx.lifecycle.viewModelScope
+import com.defnf.grid.data.offline.OfflineFiller
+import com.defnf.grid.data.offline.OfflineStore
 import com.defnf.grid.domain.model.CachedFile
+import com.defnf.grid.domain.model.Connection
 import com.defnf.grid.domain.repository.ConnectionRepository
-import com.defnf.grid.domain.repository.FileRepository
 import com.defnf.grid.domain.usecase.settings.GetSettingsUseCase
 import com.defnf.grid.presentation.util.getFileType
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -24,13 +26,17 @@ import javax.inject.Inject
 @HiltViewModel
 class CachedFilesViewModel @Inject constructor(
     private val application: Application,
-    private val fileRepository: FileRepository,
+    private val offlineStore: OfflineStore,
+    private val offlineFiller: OfflineFiller,
     private val connectionRepository: ConnectionRepository,
     private val getSettingsUseCase: GetSettingsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(CachedFilesUiState())
     val uiState: StateFlow<CachedFilesUiState> = _uiState.asStateFlow()
+
+    private var connection: Connection? = null
+    private var offlineFolder: File? = null
 
     fun initialize(connectionId: String) {
         viewModelScope.launch {
@@ -40,13 +46,17 @@ class CachedFilesViewModel @Inject constructor(
             )
 
             try {
-                val connection = connectionRepository.getConnectionById(connectionId)
+                val loaded = connectionRepository.getConnectionById(connectionId)
+                val folder = offlineStore.folderFor(loaded)
+                connection = loaded
+                offlineFolder = folder
                 val settings = getSettingsUseCase().first()
                 _uiState.value = _uiState.value.copy(
-                    connectionName = connection.name,
+                    connectionName = loaded.name,
+                    offlineLocation = folder.absolutePath,
                     viewMode = settings.defaultViewMode.name.lowercase()
                 )
-                loadCachedFiles(connectionId)
+                loadCachedFiles()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -56,21 +66,18 @@ class CachedFilesViewModel @Inject constructor(
         }
     }
 
-    private fun loadCachedFiles(connectionId: String) {
+    private fun loadCachedFiles() {
+        val connection = connection ?: return
+        val folder = offlineFolder ?: return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             try {
-                val files = withContext(Dispatchers.IO) {
-                    fileRepository.getCachedFilesForConnection(connectionId)
-                }
-                val totalSize = withContext(Dispatchers.IO) {
-                    fileRepository.getCacheSizeForConnection(connectionId)
-                }
+                val files = withContext(Dispatchers.IO) { offlineStore.list(folder, connection) }
 
                 _uiState.value = _uiState.value.copy(
                     cachedFiles = files,
-                    totalCacheSize = totalSize,
+                    totalCacheSize = files.sumOf { it.size },
                     isLoading = false
                 )
             } catch (e: Exception) {
@@ -83,17 +90,14 @@ class CachedFilesViewModel @Inject constructor(
     }
 
     fun refresh() {
-        val connectionId = _uiState.value.connectionId
-        if (connectionId.isNotEmpty()) {
-            loadCachedFiles(connectionId)
-        }
+        loadCachedFiles()
     }
 
     fun deleteCachedFile(cachedFile: CachedFile) {
         viewModelScope.launch {
             try {
                 val deleted = withContext(Dispatchers.IO) {
-                    fileRepository.deleteCachedFile(cachedFile.path)
+                    offlineStore.delete(File(cachedFile.path))
                 }
 
                 if (deleted) {
@@ -116,15 +120,15 @@ class CachedFilesViewModel @Inject constructor(
 
     fun clearAllCache() {
         val connectionId = _uiState.value.connectionId
-        if (connectionId.isEmpty()) return
+        val folder = offlineFolder ?: return
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
             try {
-                val cleared = withContext(Dispatchers.IO) {
-                    fileRepository.clearCacheForConnection(connectionId)
-                }
+                // Stop streams still saving here, or they would write their files straight back.
+                offlineFiller.cancelAll(connectionId)
+                val cleared = withContext(Dispatchers.IO) { offlineStore.clear(folder) }
 
                 if (cleared) {
                     _uiState.value = _uiState.value.copy(
@@ -203,6 +207,8 @@ class CachedFilesViewModel @Inject constructor(
 data class CachedFilesUiState(
     val connectionId: String = "",
     val connectionName: String = "",
+    // Where this connection's offline files live, e.g. /storage/emulated/0/Download/Grid/NAS
+    val offlineLocation: String = "",
     val viewMode: String = "list",
     val cachedFiles: List<CachedFile> = emptyList(),
     val totalCacheSize: Long = 0L,

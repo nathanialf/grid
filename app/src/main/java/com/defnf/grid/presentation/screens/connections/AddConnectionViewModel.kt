@@ -13,6 +13,9 @@ import com.defnf.grid.domain.usecase.credential.CreateCredentialUseCase
 import com.defnf.grid.domain.usecase.credential.GetCredentialUseCase
 import com.defnf.grid.domain.usecase.credential.UpdateCredentialUseCase
 import com.defnf.grid.data.local.SshKeyManager
+import com.defnf.grid.data.offline.OfflineStore
+import com.defnf.grid.domain.usecase.connection.GetAllConnectionsUseCase
+import kotlinx.coroutines.flow.first
 import com.defnf.grid.data.remote.ssh.HostKeyVerifier
 import com.defnf.grid.domain.model.HostKeyChangedException
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,6 +32,8 @@ import javax.inject.Inject
 class AddConnectionViewModel @Inject constructor(
     private val createConnectionUseCase: CreateConnectionUseCase,
     private val updateConnectionUseCase: UpdateConnectionUseCase,
+    private val getAllConnectionsUseCase: GetAllConnectionsUseCase,
+    private val offlineStore: OfflineStore,
     private val getConnectionUseCase: GetConnectionUseCase,
     private val createCredentialUseCase: CreateCredentialUseCase,
     private val updateCredentialUseCase: UpdateCredentialUseCase,
@@ -177,8 +182,10 @@ class AddConnectionViewModel @Inject constructor(
                 if (state.isEditMode && state.connectionId != null) {
                     updateCredentialUseCase(credential)
                     
-                    val connection = Connection(
-                        id = state.connectionId,
+                    val before = getAllConnectionsUseCase().first()
+                    val previous = before.first { it.id == state.connectionId }
+                    // Copy so creation time, order and last-connected survive an edit
+                    val connection = previous.copy(
                         name = state.formData.name,
                         hostname = state.formData.hostname,
                         protocol = state.formData.protocol,
@@ -188,6 +195,11 @@ class AddConnectionViewModel @Inject constructor(
                         startingDirectory = if (state.formData.startingDirectory.isNotBlank()) state.formData.startingDirectory else null
                     )
                     updateConnectionUseCase(connection)
+                    // Offline files follow the connection's name
+                    val after = before.map { if (it.id == connection.id) connection else it }
+                    withContext(Dispatchers.IO) {
+                        offlineStore.moveFolder(previous, before, connection, after)
+                    }
                 } else {
                     createCredentialUseCase(credential)
                     

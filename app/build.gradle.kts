@@ -22,7 +22,7 @@ if (hasReleaseKeystore) {
 
 // Single source of truth for the app version. versionName feeds BuildConfig.VERSION_NAME
 // (shown in Settings) and versionCode is derived from it below. Bump this one value.
-val appVersionName = "1.2.0"
+val appVersionName = "1.2.1"
 
 android {
     namespace = "com.defnf.grid"

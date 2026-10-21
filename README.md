@@ -12,7 +12,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **File Opening**: Open text, image, PDF, audio, video, archive, code, and ebook files with built-in viewers (text editor with smooth keyboard scrolling, image viewer with pinch-to-zoom, PDF viewer with pinch-to-zoom, audio player, video player, archive viewer, code viewer with syntax highlighting, ebook viewer with chapter navigation)
 - **APK Install**: Opening an `.apk` downloads it and hands it to the system installer, prompting once to allow Grid to install unknown apps if needed
 - **Archive Viewer**: Browse and extract ZIP, RAR, 7-Zip, TAR, and GZIP archives with hierarchical tree navigation, file metadata display, and one-click extraction with progress tracking
-- **File Caching**: Intelligent file caching system prevents re-downloading files that are already cached locally
+- **Offline Files**: Every file you open, download or stream is kept once, in `Downloads/Grid/<connection>/<server path>`, and listed in Offline Files from there (no second copy). Audio and video save as they play, the player reading its own download; leaving playback lets the save finish in the background, and an interrupted one resumes next time
 - **System Integration**: DocumentsProvider integration allows Grid to appear in other apps' file pickers for seamless file access
 - **PDF Viewer**: Native PDF viewing with page navigation, enhanced text rendering, pinch-to-zoom, and pan support
 - **Ebook Viewer**: Advanced EPUB ebook reader with HorizontalPager chapter navigation, swipe gestures, reading position persistence with scroll preservation, comprehensive text formatting (bold, italic, underline, strikethrough, superscript, subscript, code highlighting), working images with native rendering, and immersive reading experience with auto-hiding controls
@@ -21,13 +21,13 @@ A modern Android application for browsing and managing files on remote servers t
 - **Audio Player**: Enhanced audio player with responsive album art sizing, material color themes extracted from album art, metadata display (title, album, artist, year), wavy scrubbing progress bar with smooth animations, circular play button, auto-play functionality, and Android media notifications with monochrome app icon and seamless notification-to-app transitions
 - **Video Player**: Custom video player with ExoPlayer integration, wavy progress bar scrubbing with pause animation control, auto-hiding controls, pinch-to-zoom support, and Android media notifications with monochrome app icon and seamless playback state preservation
 - **Animated GIFs**: Full animated GIF support with automatic playback and pinch-to-zoom functionality
-- **File Downloads**: Download selected files to public Downloads folder with batch support and real-time progress tracking
+- **File Downloads**: Download selected files into their offline copies in `Downloads/Grid`, with batch support and real-time progress tracking
 - **Multi-Select**: File selection mode with multi-select capabilities and batch operations (auto-exits on download start)
 - **File Operations**: Delete, rename, and create directory functionality with proper SMB directory handling and recursive directory deletion for non-empty folders
 - **File Sorting**: Sort files by name, type, or last modified date with session persistence
 - **Long Press**: Enter selection mode with haptic feedback (works in both list and grid views)
 - **Path Display**: Windows-style path formatting for SMB connections (\SHARENAME\PATH)
-- **Navigation**: Home button for quick return to connections, back swipe gesture for directory navigation
+- **Navigation**: Home button for quick return to connections, back swipe gesture for directory navigation that stops at the connection's starting directory (SFTP) or share (SMB)
 - **Progress Animation**: Real-time wavy progress indicators showing actual download progress with unified track design (wavy progress + flat remaining)
 - **File Type Icons**: Intelligent file icons based on extension (PDF, images, audio, video, text files)
 - **Pull-to-Refresh**: Material 3 pull-to-refresh functionality for refreshing file listings
@@ -38,7 +38,7 @@ A modern Android application for browsing and managing files on remote servers t
 - **System UI**: Adaptive status bar colors that automatically adjust to light/dark theme
 - **Architecture**: Clean Architecture implementation with Hilt DI
 - **Secure Storage**: Android Keystore encryption for credentials
-- **Connection Management**: Add, edit, test, and manage server connections with configurable starting directories for SFTP
+- **Connection Management**: Add, edit, test, and manage server connections with configurable starting directories for SFTP, and a non-blocking warning when a hostname, username, share or starting directory starts or ends with a space
 - **About Section**: Developer information with clickable website link and version info
 
 ### ⚠️ Known Issues
@@ -203,7 +203,7 @@ For biometric authentication (optional):
 
 ### File Operations
 - Browse remote directories with pull-to-refresh functionality
-- Download files to local storage (accessible Downloads folder)
+- Download files to local storage (`Downloads/Grid/<connection>/…`, also listed in Offline Files)
 - Upload files from device with real-time progress indicators
 - Create, rename, and delete files/folders with confirmation dialogs (includes recursive deletion of non-empty directories)
 - Multi-select mode for batch operations

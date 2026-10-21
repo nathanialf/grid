@@ -167,7 +167,8 @@ fun CachedFilesScreen(
             text = {
                 Text(
                     "Are you sure you want to delete all ${uiState.cachedFiles.size} offline files? " +
-                            "This will free up ${Formatter.formatFileSize(context, uiState.totalCacheSize)}."
+                            "This will free up ${Formatter.formatFileSize(context, uiState.totalCacheSize)} " +
+                            "and removes them from ${uiState.offlineLocation}."
                 )
             },
             confirmButton = {
@@ -211,7 +212,7 @@ private fun EmptyCacheView(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Files you open from this connection will be available offline",
+            text = "Files you open, download or play from this connection are kept in Downloads/Grid",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -417,7 +418,7 @@ private fun CachedFileGridItem(
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
             title = { Text("Delete Offline File") },
-            text = { Text("Delete \"${cachedFile.name}\" from offline storage?") },
+            text = { Text("Delete \"${cachedFile.name}\"? This removes it from Downloads/Grid on this device.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -520,7 +521,7 @@ private fun CachedFileItem(
         AlertDialog(
             onDismissRequest = { showDeleteConfirmation = false },
             title = { Text("Delete Offline File") },
-            text = { Text("Delete \"${cachedFile.name}\" from offline storage?") },
+            text = { Text("Delete \"${cachedFile.name}\"? This removes it from Downloads/Grid on this device.") },
             confirmButton = {
                 TextButton(
                     onClick = {

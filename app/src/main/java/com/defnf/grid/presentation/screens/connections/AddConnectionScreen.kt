@@ -292,7 +292,8 @@ private fun ConnectionForm(
                         Icon(Icons.Default.Computer, contentDescription = null)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    supportingText = supportingTextFor(formData.hostname)
                 )
                 
                 OutlinedTextField(
@@ -320,7 +321,7 @@ private fun ConnectionForm(
                         placeholder = { Text("e.g., share, Users, Public") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        supportingText = { Text("Leave empty to auto-discover shares") }
+                        supportingText = supportingTextFor(formData.shareName, "Leave empty to auto-discover shares")
                     )
                 }
                 
@@ -336,7 +337,10 @@ private fun ConnectionForm(
                         placeholder = { Text("/path/to/folder") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
-                        supportingText = { Text("Directory to open when connecting (defaults to /)") }
+                        supportingText = supportingTextFor(
+                            formData.startingDirectory,
+                            "Directory to open when connecting (defaults to /). Browsing stays inside it."
+                        )
                     )
                 }
             }
@@ -364,7 +368,8 @@ private fun ConnectionForm(
                         Icon(Icons.Default.Person, contentDescription = null)
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    supportingText = supportingTextFor(formData.username)
                 )
                 
                 OutlinedTextField(
@@ -702,6 +707,31 @@ private fun SshKeySection(
                 }
             }
         }
+    }
+}
+
+/** A field's hint, replaced by a non-blocking warning while the value has outer spaces. */
+private fun supportingTextFor(value: String, hint: String? = null): (@Composable () -> Unit)? {
+    val warning = outerSpaceWarning(value)
+    return when {
+        warning != null -> {
+            {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(warning, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        }
+        hint != null -> {
+            { Text(hint) }
+        }
+        else -> null
     }
 }
 

@@ -1,29 +1,47 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class
+)
 
 package com.defnf.grid.presentation.screens.settings
 
+import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.DpOffset
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.defnf.grid.presentation.theme.GridTheme
-import android.content.Intent
-import androidx.core.net.toUri
 import com.defnf.grid.BuildConfig
+import com.defnf.grid.presentation.components.ShapedIcon
+import com.defnf.grid.presentation.theme.GridTheme
+
+/** One option of a connected button group: stored value, label and icon. */
+private data class SettingsChoice(
+    val value: String,
+    val label: String,
+    val icon: ImageVector
+)
 
 @Composable
 fun SettingsScreen(
@@ -32,132 +50,152 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    // Failed saves and a failed biometric check used to vanish silently
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearError()
+        }
+    }
+
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Settings",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+            LargeFlexibleTopAppBar(
+                title = { Text("Settings") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(
+                        onClick = onNavigateBack,
+                        shapes = IconButtonDefaults.shapes()
+                    ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back"
                         )
                     }
-                }
+                },
+                scrollBehavior = scrollBehavior
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp)
         ) {
-            // Security Section
-            SettingsSection(title = "Security") {
-                SettingsSwitchItem(
-                    title = "Biometric Authentication",
-                    subtitle = "Use fingerprint or face unlock for app access",
-                    checked = uiState.biometricEnabled,
-                    onCheckedChange = { enabled ->
-                        if (context is FragmentActivity) {
-                            viewModel.updateBiometricEnabled(enabled, context)
-                        } else {
-                            viewModel.updateBiometricEnabled(enabled)
-                        }
-                    },
-                    icon = Icons.Default.Fingerprint
-                )
-            }
-            
-            // File Browser Section
-            SettingsSection(title = "File Browser") {
-                SettingsSwitchItem(
-                    title = "Show Hidden Files",
-                    subtitle = "Display files and folders that start with a dot",
-                    checked = uiState.showHiddenFiles,
-                    onCheckedChange = viewModel::updateShowHiddenFiles,
-                    icon = Icons.Default.Visibility
-                )
-                
-                SettingsDropdownItem(
-                    title = "Default View Mode",
-                    subtitle = "How files are displayed in the browser",
-                    value = uiState.defaultViewMode,
-                    options = listOf("list" to "List", "grid" to "Grid"),
-                    onValueChange = viewModel::updateDefaultViewMode,
-                    icon = Icons.AutoMirrored.Filled.ViewList
-                )
-            }
-            
-            // Appearance Section
-            SettingsSection(title = "Appearance") {
-                SettingsDropdownItem(
-                    title = "Theme",
-                    subtitle = "Choose your preferred color scheme",
-                    value = uiState.themeMode,
-                    options = listOf(
-                        "system" to "Follow System",
-                        "light" to "Light",
-                        "dark" to "Dark"
-                    ),
-                    onValueChange = viewModel::updateThemeMode,
-                    icon = Icons.Default.Palette
-                )
-            }
-            
-            // About Section
-            SettingsSection(title = "About") {
-                SettingsClickableItem(
-                    title = "Developed by Nathanial Fine",
-                    subtitle = "defnf.com",
-                    icon = Icons.Default.Person,
-                    onClick = { 
-                        val intent = Intent(Intent.ACTION_VIEW, "https://defnf.com".toUri())
-                        context.startActivity(intent)
+            SettingsSectionHeader("Security")
+            SettingsSwitchItem(
+                title = "Biometric unlock",
+                subtitle = "Use fingerprint or face unlock to open Grid",
+                checked = uiState.biometricEnabled,
+                onCheckedChange = { enabled ->
+                    if (context is FragmentActivity) {
+                        viewModel.updateBiometricEnabled(enabled, context)
+                    } else {
+                        viewModel.updateBiometricEnabled(enabled)
                     }
-                )
-                
-                SettingsInfoItem(
-                    title = "Version",
-                    subtitle = BuildConfig.VERSION_NAME,
-                    icon = Icons.Default.Info
-                )
-            }
+                },
+                icon = Icons.Default.Fingerprint,
+                iconContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                iconContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1)
+            )
+
+            SettingsSectionHeader("File browser")
+            SettingsSwitchItem(
+                title = "Show hidden files",
+                subtitle = "Display files and folders that start with a dot",
+                checked = uiState.showHiddenFiles,
+                onCheckedChange = viewModel::updateShowHiddenFiles,
+                icon = Icons.Default.Visibility,
+                iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                iconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 2)
+            )
+            Spacer(modifier = Modifier.height(ListItemDefaults.SegmentedGap))
+            SettingsChoiceItem(
+                title = "Default view",
+                subtitle = "How folders are shown when you open them",
+                icon = Icons.Default.GridView,
+                iconContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                iconContentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                value = uiState.defaultViewMode,
+                choices = listOf(
+                    SettingsChoice("list", "List", Icons.AutoMirrored.Filled.ViewList),
+                    SettingsChoice("grid", "Grid", Icons.Default.GridView)
+                ),
+                onValueChange = viewModel::updateDefaultViewMode,
+                shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2)
+            )
+
+            SettingsSectionHeader("Appearance")
+            SettingsChoiceItem(
+                title = "Theme",
+                subtitle = "Choose your preferred color scheme",
+                icon = Icons.Default.Palette,
+                iconContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                iconContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                value = uiState.themeMode,
+                choices = listOf(
+                    SettingsChoice("system", "System", Icons.Default.BrightnessAuto),
+                    SettingsChoice("light", "Light", Icons.Default.LightMode),
+                    SettingsChoice("dark", "Dark", Icons.Default.DarkMode)
+                ),
+                onValueChange = viewModel::updateThemeMode,
+                shapes = ListItemDefaults.segmentedShapes(index = 0, count = 1)
+            )
+
+            SettingsSectionHeader("About")
+            AboutCard(
+                onOpenWebsite = {
+                    val intent = Intent(Intent.ACTION_VIEW, "https://defnf.com".toUri())
+                    context.startActivity(intent)
+                }
+            )
         }
     }
 }
 
 @Composable
-private fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Card {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            
-            content()
-        }
-    }
+private fun SettingsSectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmallEmphasized,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
+    )
 }
+
+/** The leading icon of a settings row: a small icon on an expressive cookie shape. */
+@Composable
+private fun SettingsIcon(
+    icon: ImageVector,
+    containerColor: Color,
+    contentColor: Color
+) {
+    ShapedIcon(
+        imageVector = icon,
+        shape = MaterialShapes.Cookie4Sided.toShape(),
+        containerColor = containerColor,
+        contentColor = contentColor,
+        modifier = Modifier.size(40.dp),
+        iconSize = 22.dp
+    )
+}
+
+/** Container tone for settings rows: the default segmented Surface vanishes on the Scaffold. */
+@Composable
+private fun settingsItemColors(): ListItemColors = ListItemDefaults.segmentedColors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    // A toggleable row reports itself as selected while on; keep it the same tone
+    selectedContainerColor = MaterialTheme.colorScheme.surfaceContainer
+)
 
 @Composable
 private fun SettingsSwitchItem(
@@ -165,110 +203,126 @@ private fun SettingsSwitchItem(
     subtitle: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
+    icon: ImageVector,
+    iconContainerColor: Color,
+    iconContentColor: Color,
+    shapes: ListItemShapes
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.width(16.dp))
-        
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange
-        )
-    }
-}
-
-@Composable
-private fun SettingsDropdownItem(
-    title: String,
-    subtitle: String,
-    value: String,
-    options: List<Pair<String, String>>,
-    onValueChange: (String) -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedOption = options.find { it.first == value }?.second ?: value
-    
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = subtitle,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            TextButton(
-                onClick = { expanded = true }
-            ) {
-                Text(
-                    text = selectedOption,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-        
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            offset = DpOffset(x = (-48).dp, y = 0.dp)
-        ) {
-            options.forEach { (optionValue, label) ->
-                DropdownMenuItem(
-                    text = { Text(label) },
-                    onClick = {
-                        onValueChange(optionValue)
-                        expanded = false
+    // The whole row toggles; the switch only mirrors the state
+    SegmentedListItem(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        shapes = shapes,
+        colors = settingsItemColors(),
+        leadingContent = { SettingsIcon(icon, iconContainerColor, iconContentColor) },
+        supportingContent = { Text(subtitle) },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                thumbContent = if (checked) {
+                    {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(SwitchDefaults.IconSize)
+                        )
                     }
+                } else {
+                    null
+                }
+            )
+        }
+    ) {
+        Text(title)
+    }
+}
+
+/**
+ * A settings row whose value is picked from a connected button group laid out under the title,
+ * so every option is visible and one tap away.
+ */
+@Composable
+private fun SettingsChoiceItem(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    iconContainerColor: Color,
+    iconContentColor: Color,
+    value: String,
+    choices: List<SettingsChoice>,
+    onValueChange: (String) -> Unit,
+    shapes: ListItemShapes
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shapes.shape,
+        color = MaterialTheme.colorScheme.surfaceContainer
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SettingsIcon(icon, iconContainerColor, iconContentColor)
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            ConnectedChoiceGroup(
+                value = value,
+                choices = choices,
+                onValueChange = onValueChange
+            )
+        }
+    }
+}
+
+/** A single-select connected button group spanning the full width. */
+@Composable
+private fun ConnectedChoiceGroup(
+    value: String,
+    choices: List<SettingsChoice>,
+    onValueChange: (String) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+    ) {
+        choices.forEachIndexed { index, choice ->
+            ToggleButton(
+                checked = value == choice.value,
+                onCheckedChange = { onValueChange(choice.value) },
+                shapes = when (index) {
+                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                },
+                icon = {
+                    Icon(
+                        imageVector = choice.icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(ToggleButtonDefaults.IconSize)
+                    )
+                },
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { role = Role.RadioButton }
+            ) {
+                Text(
+                    text = choice.label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -276,81 +330,69 @@ private fun SettingsDropdownItem(
 }
 
 @Composable
-private fun SettingsClickableItem(
-    title: String,
-    subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.width(16.dp))
-        
-        Column(
-            modifier = Modifier.weight(1f)
+private fun AboutCard(onOpenWebsite: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = ListItemDefaults.segmentedShapes(index = 0, count = 2).shape,
+            color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        
-        IconButton(onClick = onClick) {
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = "Open",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
+            Row(
+                modifier = Modifier.padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ShapedIcon(
+                    imageVector = Icons.Default.GridView,
+                    shape = MaterialShapes.Cookie9Sided.toShape(),
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(64.dp),
+                    iconSize = 32.dp
+                )
 
-@Composable
-private fun SettingsInfoItem(
-    title: String,
-    subtitle: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.width(16.dp))
-        
-        Column(
-            modifier = Modifier.weight(1f)
+                Spacer(modifier = Modifier.width(16.dp))
+
+                Column {
+                    Text(
+                        text = "Grid",
+                        style = MaterialTheme.typography.headlineMediumEmphasized
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerLowest.copy(alpha = 0.5f)
+                    ) {
+                        Text(
+                            text = "Version ${BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        SegmentedListItem(
+            onClick = onOpenWebsite,
+            shapes = ListItemDefaults.segmentedShapes(index = 1, count = 2),
+            colors = settingsItemColors(),
+            leadingContent = {
+                SettingsIcon(
+                    icon = Icons.Default.Person,
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            },
+            supportingContent = { Text("defnf.com") },
+            trailingContent = {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                    contentDescription = "Open website"
+                )
+            }
         ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Text("Developed by Nathanial Fine")
         }
     }
 }

@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.domain.model.CachedFile
 import com.defnf.grid.presentation.components.FileThumbnailFill
+import com.defnf.grid.presentation.components.ShapedIcon
 import com.defnf.grid.presentation.components.hasThumbnail
 import com.defnf.grid.presentation.util.getFileIcon
 import java.io.File
@@ -608,31 +609,6 @@ private fun CachedFileItem(
                 onDelete()
             },
             onDismiss = { showDeleteConfirmation = false }
-        )
-    }
-}
-
-/** An icon centred in a filled container clipped to one of the Material 3 Expressive shapes. */
-@Composable
-private fun ShapedIcon(
-    imageVector: androidx.compose.ui.graphics.vector.ImageVector,
-    shape: Shape,
-    containerColor: Color,
-    contentColor: Color,
-    modifier: Modifier = Modifier,
-    iconSize: androidx.compose.ui.unit.Dp = 24.dp
-) {
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(containerColor),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = imageVector,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(iconSize)
         )
     }
 }

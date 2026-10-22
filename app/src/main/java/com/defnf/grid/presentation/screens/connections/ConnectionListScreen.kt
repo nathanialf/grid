@@ -473,8 +473,8 @@ private fun ConnectionCard(
                     containerColor = protocolContainerColor(connection.protocol),
                     contentColor = protocolContentColor(connection.protocol),
                     modifier = Modifier.size(56.dp),
-                    iconSize = 28.dp,
-                    contentDescription = connection.protocol.name
+                    iconSize = 28.dp
+                    // No description: the protocol chip below already names it for screen readers
                 )
 
                 Spacer(modifier = Modifier.width(16.dp))

@@ -25,9 +25,9 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Sort
 import com.defnf.grid.presentation.components.HostKeyChangedDialog
 import com.defnf.grid.presentation.components.ShapedIcon
+import com.defnf.grid.presentation.components.animatedPressCorner
 import com.defnf.grid.presentation.util.getFileIcon
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
@@ -1000,18 +1000,6 @@ private fun handleFileOpen(
     }
 }
 
-/** Expressive press feedback for grid tiles: corners tighten while held and spring back. */
-@Composable
-private fun tileCorner(interactionSource: MutableInteractionSource): Dp {
-    val pressed by interactionSource.collectIsPressedAsState()
-    val corner by animateDpAsState(
-        targetValue = if (pressed) 12.dp else 24.dp,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "GridTileCorner"
-    )
-    return corner
-}
-
 @Composable
 private fun ParentDirectoryGridItem(
     onNavigateUp: () -> Unit
@@ -1022,7 +1010,7 @@ private fun ParentDirectoryGridItem(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1.5f),
-        shape = RoundedCornerShape(tileCorner(interactionSource)),
+        shape = RoundedCornerShape(animatedPressCorner(interactionSource)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
@@ -1082,7 +1070,7 @@ private fun FileGridItem(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1.5f),
-        shape = RoundedCornerShape(tileCorner(interactionSource)),
+        shape = RoundedCornerShape(animatedPressCorner(interactionSource)),
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Box(

@@ -113,18 +113,17 @@ class ConnectionRepositoryImpl @Inject constructor(
         }
     }
     
-    override suspend fun updateConnectionOrder(connectionId: String, newOrder: Int): Result<Unit> {
+    override suspend fun reorderConnections(orderedIds: List<String>): Result<Unit> {
         return try {
-            val currentConnections = preferencesManager.getConnections().first().toMutableList()
-            val connectionIndex = currentConnections.indexOfFirst { it.id == connectionId }
-            
-            if (connectionIndex >= 0) {
-                val updatedConnection = currentConnections[connectionIndex].copy(order = newOrder)
-                currentConnections[connectionIndex] = updatedConnection
-                preferencesManager.saveConnections(currentConnections)
-                GridDocumentsProvider.notifyRootsChanged(context)
+            val positions = orderedIds.withIndex().associate { (index, id) -> id to index }
+            // One write for the whole order: writing each connection separately emitted every
+            // half-applied order, so a dropped card jumped back and forth before settling
+            preferencesManager.updateConnections { connections ->
+                connections.map { connection ->
+                    positions[connection.id]?.let { connection.copy(order = it) } ?: connection
+                }
             }
-            
+            GridDocumentsProvider.notifyRootsChanged(context)
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Error(e)

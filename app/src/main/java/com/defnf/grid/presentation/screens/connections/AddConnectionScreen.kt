@@ -498,16 +498,17 @@ private fun StatusBanner(
     isError: (String) -> Boolean,
     onDismiss: () -> Unit
 ) {
-    // A plain holder, not state: it only needs to outlive the message for the exit animation
-    val lastMessage = remember { arrayOfNulls<String>(1) }
-    if (message != null) lastMessage[0] = message
+    // Outlives the message for the exit animation. It must be state: a plain holder left the
+    // banner showing the old text when a new message arrived while the old one was leaving.
+    val lastMessage = remember { mutableStateOf(message) }
+    if (message != null) lastMessage.value = message
 
     AnimatedVisibility(
         visible = message != null,
         enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
         exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
     ) {
-        val shown = lastMessage[0] ?: return@AnimatedVisibility
+        val shown = lastMessage.value ?: return@AnimatedVisibility
         val error = isError(shown)
         Surface(
             modifier = Modifier.fillMaxWidth(),

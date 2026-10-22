@@ -495,23 +495,6 @@ private fun ConnectionCard(
                     )
                 }
 
-                if (canReorder) {
-                    // Hidden from screen readers, which reorder through the menu's Move up/down
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .then(dragHandleModifier)
-                            .clearAndSetSemantics {},
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DragHandle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
                 Box {
                     IconButton(
                         onClick = { showDropdownMenu = true },
@@ -536,55 +519,82 @@ private fun ConnectionCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Protocol badge, plus the share or starting folder when one is set
+            // Protocol badge, the share or starting folder when one is set, and the drag handle
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = protocolContainerColor(connection.protocol),
-                    contentColor = protocolContentColor(connection.protocol)
+                // The chips take whatever the handle leaves, so a long folder path keeps its room
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = connection.protocol.name,
-                        style = MaterialTheme.typography.labelLargeEmphasized,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-                    )
-                }
-
-                location?.let {
                     Surface(
                         shape = CircleShape,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = protocolContainerColor(connection.protocol),
+                        contentColor = protocolContentColor(connection.protocol)
                     ) {
-                        Row(
-                            modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        Text(
+                            text = connection.protocol.name,
+                            style = MaterialTheme.typography.labelLargeEmphasized,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    location?.let {
+                        Surface(
+                            modifier = Modifier.weight(1f, fill = false),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ) {
-                            Icon(
-                                imageVector = if (connection.protocol == Protocol.SMB) {
-                                    Icons.Default.FolderShared
-                                } else {
-                                    Icons.Default.FolderOpen
-                                },
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.labelLarge,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            Row(
+                                modifier = Modifier.padding(start = 8.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = if (connection.protocol == Protocol.SMB) {
+                                        Icons.Default.FolderShared
+                                    } else {
+                                        Icons.Default.FolderOpen
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
+                    }
+                }
+
+                if (canReorder) {
+                    // Hidden from screen readers, which reorder through the menu's Move up/down
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .then(dragHandleModifier)
+                            .clearAndSetSemantics {},
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Expressive tonal button: a pill at rest that squares off while pressed
             FilledTonalButton(

@@ -1,3 +1,5 @@
+@file:kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.defnf.grid.presentation.fileviewer.composables
 
 import android.graphics.Bitmap
@@ -138,8 +140,9 @@ fun PDFViewer(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
+                shape = MaterialTheme.shapes.extraLarge,
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 )
             ) {
                 Row(
@@ -151,7 +154,8 @@ fun PDFViewer(
                 ) {
                     IconButton(
                         onClick = { if (currentPage > 0) currentPage-- },
-                        enabled = currentPage > 0
+                        enabled = currentPage > 0,
+                        shapes = IconButtonDefaults.shapes()
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.NavigateBefore,
@@ -167,7 +171,8 @@ fun PDFViewer(
                     
                     IconButton(
                         onClick = { if (currentPage < totalPages - 1) currentPage++ },
-                        enabled = currentPage < totalPages - 1
+                        enabled = currentPage < totalPages - 1,
+                        shapes = IconButtonDefaults.shapes()
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.NavigateNext,
@@ -187,7 +192,7 @@ fun PDFViewer(
         ) {
             when {
                 isLoading -> {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                 }
                 error != null -> {
                     Column(

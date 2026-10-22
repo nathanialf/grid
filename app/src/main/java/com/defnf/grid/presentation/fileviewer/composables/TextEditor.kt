@@ -1,3 +1,5 @@
+@file:kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.defnf.grid.presentation.fileviewer.composables
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -127,14 +129,16 @@ fun TextEditor(
                     onClick = {
                         showExitDialog = false
                         onExit()
-                    }
+                    },
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     Text("Exit Without Saving")
                 }
             },
             dismissButton = {
                 TextButton(
-                    onClick = { showExitDialog = false }
+                    onClick = { showExitDialog = false },
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     Text("Cancel")
                 }
@@ -148,7 +152,7 @@ fun TextEditor(
                 modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
         }
         error != null -> {

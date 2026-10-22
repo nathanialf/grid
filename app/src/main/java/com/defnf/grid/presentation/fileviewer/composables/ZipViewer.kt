@@ -1,3 +1,5 @@
+@file:kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.defnf.grid.presentation.fileviewer.composables
 
 import androidx.compose.foundation.clickable
@@ -19,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import com.defnf.grid.presentation.components.ShapedIcon
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
@@ -81,26 +84,41 @@ fun ZipViewer(
     Column(modifier = modifier.fillMaxSize()) {
         // Header with archive info
         if (!isLoading && archiveEntries.isNotEmpty()) {
-            Card(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp)
+                        .padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     val totalFiles = countTotalFiles(archiveEntries)
                     val totalSize = calculateTotalSize(archiveEntries)
-                    Text(
-                        text = "$totalFiles files • ${formatFileSize(totalSize)}",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
+                    ShapedIcon(
+                        imageVector = Icons.Default.FolderZip,
+                        shape = MaterialShapes.Cookie9Sided.toShape(),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(56.dp),
+                        iconSize = 28.dp
                     )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Column {
+                        Text(
+                            text = formatFileSize(totalSize),
+                            style = MaterialTheme.typography.headlineSmallEmphasized
+                        )
+                        Text(
+                            text = "$totalFiles ${if (totalFiles == 1) "file" else "files"}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
         }
@@ -112,7 +130,7 @@ fun ZipViewer(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    LoadingIndicator()
                 }
             }
             error != null -> {
@@ -123,11 +141,14 @@ fun ZipViewer(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Error,
-                            contentDescription = "Error",
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.error
+                        ShapedIcon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            shape = MaterialShapes.Cookie4Sided.toShape(),
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.size(96.dp),
+                            iconSize = 44.dp,
+                            contentDescription = "Error"
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
@@ -188,12 +209,10 @@ private fun ArchiveEntryItem(
     val locale = LocalConfiguration.current.locales[0]
     val dateFormat = remember(locale) { SimpleDateFormat("MMM dd, yyyy", locale) }
     
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainer
     ) {
         Column {
             Row(

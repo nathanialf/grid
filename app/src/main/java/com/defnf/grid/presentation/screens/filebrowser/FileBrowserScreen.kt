@@ -1,4 +1,8 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class
+)
 
 package com.defnf.grid.presentation.screens.filebrowser
 
@@ -10,19 +14,23 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.combinedClickable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.automirrored.filled.Sort
 import com.defnf.grid.presentation.components.HostKeyChangedDialog
-import com.defnf.grid.presentation.components.FileThumbnail
+import com.defnf.grid.presentation.components.ShapedIcon
+import com.defnf.grid.presentation.util.getFileIcon
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Dp
 import com.defnf.grid.presentation.components.FileThumbnailFill
 import com.defnf.grid.presentation.components.hasThumbnail
 import androidx.compose.foundation.background
@@ -39,13 +47,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.font.FontWeight
 import android.app.Activity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.DpOffset
 import com.defnf.grid.domain.model.RemoteFile
 import androidx.core.content.ContextCompat
 import android.Manifest
@@ -168,43 +174,42 @@ fun FileBrowserScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
+            // Selecting tints the bar so the mode change reads at a glance
+            val barColor by animateColorAsState(
+                targetValue = if (uiState.isSelectionMode) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surface
+                },
+                animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
+                label = "TopBarColor"
+            )
             TopAppBar(
                 title = {
-                    Column {
-                        if (uiState.isSelectionMode) {
-                            Text(
-                                text = "${uiState.selectedFiles.size} selected",
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = formatPath(uiState.currentPath, uiState.connectionName, uiState.protocol, uiState.shareName),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        } else {
-                            Text(
-                                text = uiState.connectionName,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = formatPath(uiState.currentPath, uiState.connectionName, uiState.protocol, uiState.shareName),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                    AnimatedContent(
+                        targetState = uiState.isSelectionMode,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "TopBarTitle"
+                    ) { selecting ->
+                        Text(
+                            text = if (selecting) "${uiState.selectedFiles.size} selected" else uiState.connectionName,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 },
+                subtitle = {
+                    Text(
+                        text = formatPath(uiState.currentPath, uiState.connectionName, uiState.protocol, uiState.shareName),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = barColor),
                 navigationIcon = {
                     IconButton(
-                        onClick = debouncedNavigateBack
+                        onClick = debouncedNavigateBack,
+                        shapes = IconButtonDefaults.shapes()
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Home,
@@ -215,60 +220,29 @@ fun FileBrowserScreen(
                 actions = {
                     // Only show sort dropdown when not loading
                     if (!uiState.isLoading) {
-                        // Sort dropdown
                         var expanded by remember { mutableStateOf(false) }
-                        
+
                         Box {
-                            IconButton(onClick = { expanded = true }) {
+                            IconButton(
+                                onClick = { expanded = true },
+                                shapes = IconButtonDefaults.shapes()
+                            ) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.Sort,
                                     contentDescription = "Sort"
                                 )
                             }
-                        
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false },
-                            offset = DpOffset(0.dp, 0.dp)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Name") },
-                                onClick = {
-                                    viewModel.setSortOption(SortOption.NAME)
+
+                            SortMenu(
+                                expanded = expanded,
+                                selected = uiState.sortOption,
+                                onSelect = {
+                                    viewModel.setSortOption(it)
                                     expanded = false
                                 },
-                                leadingIcon = {
-                                    if (uiState.sortOption == SortOption.NAME) {
-                                        Icon(Icons.Default.Check, contentDescription = null)
-                                    }
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Type") },
-                                onClick = {
-                                    viewModel.setSortOption(SortOption.TYPE)
-                                    expanded = false
-                                },
-                                leadingIcon = {
-                                    if (uiState.sortOption == SortOption.TYPE) {
-                                        Icon(Icons.Default.Check, contentDescription = null)
-                                    }
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Last Modified") },
-                                onClick = {
-                                    viewModel.setSortOption(SortOption.LAST_MODIFIED)
-                                    expanded = false
-                                },
-                                leadingIcon = {
-                                    if (uiState.sortOption == SortOption.LAST_MODIFIED) {
-                                        Icon(Icons.Default.Check, contentDescription = null)
-                                    }
-                                }
+                                onDismiss = { expanded = false }
                             )
                         }
-                    }
                     }
                 }
             )
@@ -324,7 +298,10 @@ fun FileBrowserScreen(
                     ) { isSelecting ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (isSelecting) {
-                                IconButton(onClick = { viewModel.exitSelectionMode() }) {
+                                IconButton(
+                                    onClick = { viewModel.exitSelectionMode() },
+                                    shapes = IconButtonDefaults.shapes()
+                                ) {
                                     Icon(Icons.Default.Clear, contentDescription = "Clear Selection")
                                 }
                                 // Rename only applies to exactly one file
@@ -336,21 +313,29 @@ fun FileBrowserScreen(
                                             showRenameDialog = true
                                         }
                                     },
-                                    enabled = uiState.selectedFiles.size == 1
+                                    enabled = uiState.selectedFiles.size == 1,
+                                    shapes = IconButtonDefaults.shapes()
                                 ) {
                                     Icon(Icons.Default.Edit, contentDescription = "Rename")
                                 }
                                 IconButton(
                                     onClick = { viewModel.downloadSelectedFiles() },
-                                    enabled = hasSelection
+                                    enabled = hasSelection,
+                                    shapes = IconButtonDefaults.shapes()
                                 ) {
                                     Icon(Icons.Default.Download, contentDescription = "Download Selected")
                                 }
                             } else {
-                                IconButton(onClick = { viewModel.enterSelectionMode() }) {
+                                IconButton(
+                                    onClick = { viewModel.enterSelectionMode() },
+                                    shapes = IconButtonDefaults.shapes()
+                                ) {
                                     Icon(Icons.Default.Checklist, contentDescription = "Select Files")
                                 }
-                                IconButton(onClick = { viewModel.createDirectory("New Folder") }) {
+                                IconButton(
+                                    onClick = { viewModel.createDirectory("New Folder") },
+                                    shapes = IconButtonDefaults.shapes()
+                                ) {
                                     Icon(Icons.Default.CreateNewFolder, contentDescription = "Create Folder")
                                 }
                             }
@@ -397,7 +382,7 @@ fun FileBrowserScreen(
                         contentPadding = PaddingValues(
                             start = 16.dp,
                             end = 16.dp,
-                            top = 16.dp,
+                            top = 8.dp,
                             bottom = 96.dp // Extra padding for floating toolbar
                         ),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -447,25 +432,33 @@ fun FileBrowserScreen(
                             contentPadding = PaddingValues(
                                 start = 16.dp,
                                 end = 16.dp,
-                                top = 16.dp,
+                                top = 8.dp,
                                 bottom = 96.dp // Extra padding for floating toolbar
                             ),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)
                         ) {
+                        // One segmented group: the parent row (when shown) and every entry
+                        val parentRows = if (uiState.canNavigateUp) 1 else 0
+                        val rowCount = visibleFiles.size + parentRows
+
                         // Show the parent directory unless this is the connection's root
                         if (uiState.canNavigateUp) {
                             item {
-                                ParentDirectoryItem(onNavigateUp = { viewModel.navigateUp() })
+                                ParentDirectoryItem(
+                                    shapes = ListItemDefaults.segmentedShapes(index = 0, count = rowCount),
+                                    onNavigateUp = { viewModel.navigateUp() }
+                                )
                             }
                         }
                         
-                        items(
+                        itemsIndexed(
                             items = visibleFiles,
-                            key = { file -> file.path },
-                            contentType = { file -> if (file.isDirectory) "directory" else "file" }
-                        ) { file ->
+                            key = { _, file -> file.path },
+                            contentType = { _, file -> if (file.isDirectory) "directory" else "file" }
+                        ) { index, file ->
                             FileItem(
                                 modifier = Modifier.animateItem(),
+                                shapes = ListItemDefaults.segmentedShapes(index = index + parentRows, count = rowCount),
                                 file = file,
                                 thumbnailFile = offlineThumbnailFile(uiState.offlineCopies[file.path], file),
                                 onClick = {
@@ -494,79 +487,20 @@ fun FileBrowserScreen(
                 }
             }
             
-            // Upload progress overlay
-            if (uiState.isUploading) {
-                Card(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    ),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Upload,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            
-                            Column(modifier = Modifier.weight(1f)) {
-                                if (uiState.uploadTotalCount > 1) {
-                                    Text(
-                                        text = "Uploading ${uiState.uploadCurrentIndex} of ${uiState.uploadTotalCount}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = "${uiState.uploadFileName} · ${(uiState.uploadProgress * 100).toInt()}%",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                } else {
-                                    Text(
-                                        text = "Uploading ${uiState.uploadFileName}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                    Text(
-                                        text = "${(uiState.uploadProgress * 100).toInt()}%",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            
-                            IconButton(
-                                onClick = { viewModel.cancelUpload() }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "Cancel upload",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        
-                        WavyLinearProgressIndicator(
-                            progress = uiState.uploadProgress,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
+            // Upload progress card, in the floating toolbar's place
+            AnimatedVisibility(
+                visible = uiState.isUploading,
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                UploadProgressCard(
+                    fileName = uiState.uploadFileName,
+                    progress = uiState.uploadProgress,
+                    currentIndex = uiState.uploadCurrentIndex,
+                    totalCount = uiState.uploadTotalCount,
+                    onCancel = { viewModel.cancelUpload() }
+                )
             }
         }
     }
@@ -580,12 +514,14 @@ fun FileBrowserScreen(
                 showRenameDialog = false
                 fileToRename = null
             },
+            icon = { Icon(Icons.Default.DriveFileRenameOutline, contentDescription = null) },
             title = { Text("Rename") },
             text = {
                 OutlinedTextField(
                     value = newName,
                     onValueChange = { newName = it },
                     label = { Text("New name") },
+                    shape = MaterialTheme.shapes.large,
                     singleLine = true
                 )
             },
@@ -600,7 +536,8 @@ fun FileBrowserScreen(
                             showRenameDialog = false
                             fileToRename = null
                         }
-                    }
+                    },
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     Text("Rename")
                 }
@@ -610,7 +547,8 @@ fun FileBrowserScreen(
                     onClick = { 
                         showRenameDialog = false
                         fileToRename = null
-                    }
+                    },
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     Text("Cancel")
                 }
@@ -637,18 +575,21 @@ fun FileBrowserScreen(
         
         AlertDialog(
             onDismissRequest = { viewModel.dismissDeleteConfirmation() },
-            title = { Text("Confirm Delete") },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null) },
+            title = { Text("Delete?") },
             text = { Text(dialogText) },
             confirmButton = {
                 TextButton(
-                    onClick = { viewModel.confirmDeleteSelectedFiles() }
+                    onClick = { viewModel.confirmDeleteSelectedFiles() },
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     Text("Delete")
                 }
             },
             dismissButton = {
                 TextButton(
-                    onClick = { viewModel.dismissDeleteConfirmation() }
+                    onClick = { viewModel.dismissDeleteConfirmation() },
+                    shapes = ButtonDefaults.shapes()
                 ) {
                     Text("Cancel")
                 }
@@ -689,114 +630,220 @@ private fun formatPath(path: String, connectionName: String, protocol: String, s
 }
 
 
+/** Sort options as an expressive menu group; the current choice is checked. */
 @Composable
-private fun ErrorView(
-    error: String,
-    onRetry: () -> Unit,
-    modifier: Modifier = Modifier
+private fun SortMenu(
+    expanded: Boolean,
+    selected: SortOption,
+    onSelect: (SortOption) -> Unit,
+    onDismiss: () -> Unit
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    val options = listOf(
+        SortOption.NAME to "Name",
+        SortOption.TYPE to "Type",
+        SortOption.LAST_MODIFIED to "Last modified"
+    )
+
+    DropdownMenuPopup(
+        expanded = expanded,
+        onDismissRequest = onDismiss
     ) {
-        Icon(
-            imageVector = Icons.Default.Error,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.error
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Connection Error",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.error
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = error,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        Button(onClick = onRetry) {
-            Icon(
-                imageVector = Icons.Default.Refresh,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Retry")
+        DropdownMenuGroup(shapes = MenuDefaults.groupShape(index = 0, count = 1)) {
+            options.forEachIndexed { index, (option, label) ->
+                CheckableDropdownMenuItem(
+                    checked = selected == option,
+                    onCheckedChange = { onSelect(option) },
+                    text = { Text(label) },
+                    shapes = MenuDefaults.itemShape(index = index, count = options.size),
+                    checkedLeadingIcon = { Icon(Icons.Default.Check, contentDescription = null) }
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun EmptyDirectoryView(
-    modifier: Modifier = Modifier
+private fun UploadProgressCard(
+    fileName: String,
+    progress: Float,
+    currentIndex: Int,
+    totalCount: Int,
+    onCancel: () -> Unit
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 6.dp
     ) {
-        Icon(
-            imageVector = Icons.Default.FolderOpen,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(
-            text = "Empty Directory",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "This directory contains no files",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ShapedIcon(
+                    imageVector = Icons.Default.Upload,
+                    shape = MaterialShapes.Cookie9Sided.toShape(),
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(48.dp)
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (totalCount > 1) {
+                            "Uploading $currentIndex of $totalCount"
+                        } else {
+                            "Uploading $fileName"
+                        },
+                        style = MaterialTheme.typography.titleSmallEmphasized,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (totalCount > 1) {
+                            "$fileName · ${(progress * 100).toInt()}%"
+                        } else {
+                            "${(progress * 100).toInt()}%"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                IconButton(
+                    onClick = onCancel,
+                    shapes = IconButtonDefaults.shapes()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Cancel upload",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            WavyLinearProgressIndicator(
+                progress = progress,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(end = 8.dp)
+            )
+        }
     }
 }
 
+/** Container tone for browser rows: the default segmented Surface vanishes on the Scaffold. */
+@Composable
+private fun fileRowColors(): ListItemColors = ListItemDefaults.segmentedColors(
+    containerColor = MaterialTheme.colorScheme.surfaceContainer
+)
+
 @Composable
 private fun ParentDirectoryItem(
+    shapes: ListItemShapes,
     onNavigateUp: () -> Unit
 ) {
-    Card(
+    SegmentedListItem(
         onClick = onNavigateUp,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
+        shapes = shapes,
+        colors = fileRowColors(),
+        leadingContent = {
+            ShapedIcon(
                 imageVector = Icons.Default.ArrowUpward,
-                contentDescription = "Parent Directory",
-                tint = MaterialTheme.colorScheme.primary
+                shape = MaterialShapes.Cookie4Sided.toShape(),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(48.dp),
+                contentDescription = "Parent Directory"
             )
-            
-            Spacer(modifier = Modifier.width(16.dp))
-            
-            Text(
-                text = "..",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
+        },
+        supportingContent = { Text("Up one level") }
+    ) {
+        Text(text = "..")
+    }
+}
+
+/**
+ * The leading visual of a file row or tile: a check while selected, download progress, a real
+ * thumbnail when an offline copy has one, or the type icon on an expressive shape.
+ */
+@Composable
+private fun FileLeadingVisual(
+    file: RemoteFile,
+    isSelected: Boolean,
+    isDownloading: Boolean,
+    downloadProgress: Float,
+    thumbnailFile: File?,
+    size: Dp,
+    iconSize: Dp
+) {
+    // Read outside transitionSpec, which isn't a composable context
+    val scaleSpec = MaterialTheme.motionScheme.fastSpatialSpec<Float>()
+    AnimatedContent(
+        targetState = isSelected,
+        transitionSpec = {
+            (scaleIn(scaleSpec) + fadeIn()) togetherWith (scaleOut(scaleSpec) + fadeOut())
+        },
+        label = "FileLeadingVisual"
+    ) { selected ->
+        when {
+            selected -> ShapedIcon(
+                imageVector = Icons.Default.Check,
+                shape = CircleShape,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(size),
+                iconSize = iconSize,
+                contentDescription = "Selected"
+            )
+
+            isDownloading && !file.isDirectory -> Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(MaterialShapes.Cookie4Sided.toShape())
+                    .background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                WavyCircularProgressIndicator(
+                    progress = downloadProgress,
+                    modifier = Modifier.size(iconSize + 8.dp),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+
+            hasThumbnail(file.name, file.isDirectory, thumbnailFile) -> FileThumbnailFill(
+                fileName = file.name,
+                localFile = thumbnailFile,
+                modifier = Modifier
+                    .size(size)
+                    .clip(MaterialTheme.shapes.medium)
+            )
+
+            file.isDirectory -> ShapedIcon(
+                imageVector = Icons.Default.Folder,
+                shape = MaterialShapes.Cookie9Sided.toShape(),
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.size(size),
+                iconSize = iconSize,
+                contentDescription = "Directory"
+            )
+
+            else -> ShapedIcon(
+                imageVector = getFileIcon(file.name),
+                shape = MaterialShapes.Cookie4Sided.toShape(),
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(size),
+                iconSize = iconSize,
+                contentDescription = "File"
             )
         }
     }
@@ -806,6 +853,7 @@ private fun ParentDirectoryItem(
 private fun FileItem(
     file: RemoteFile,
     onClick: () -> Unit,
+    shapes: ListItemShapes,
     modifier: Modifier = Modifier,
     isSelectionMode: Boolean = false,
     isSelected: Boolean = false,
@@ -817,140 +865,68 @@ private fun FileItem(
 ) {
     val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
     val hapticFeedback = LocalHapticFeedback.current
-    
-    val containerColor by animateColorAsState(
-        targetValue = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHighest
-        },
-        label = "FileItemContainer"
-    )
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                // combinedClickable always calls the latest lambdas (a pointerInput keyed only on
-                // selection mode kept stale ones, so tapping a downloading file started a second
-                // download instead of cancelling), and adds ripple + TalkBack actions.
-                .combinedClickable(
-                    onClick = {
-                        if (isSelectionMode) {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onSelectionToggle()
-                        } else {
-                            onClick()
-                        }
-                    },
-                    onLongClickLabel = "Select",
-                    onLongClick = {
-                        if (!isSelectionMode) {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            onLongPress()
-                        }
-                    }
-                )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(72.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+
+    val details = buildList {
+        if (!file.isDirectory && file.size > 0) add(formatFileSize(file.size))
+        if (file.lastModified > 0) add(dateFormat.format(Date(file.lastModified)))
+    }.joinToString(" · ")
+
+    // A selected row takes the segmented list's selected shape and tone
+    SegmentedListItem(
+        selected = isSelected,
+        onClick = {
             if (isSelectionMode) {
-                Spacer(modifier = Modifier.width(16.dp))
-                Checkbox(
-                    checked = isSelected,
-                    onCheckedChange = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSelectionToggle()
-                    }
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-
-            // A cached thumbnail runs full-height flush to the card's left edge for a richer row;
-            // icons (and selection mode) keep the standard inset.
-            val showEdgeThumbnail = !isDownloading &&
-                hasThumbnail(file.name, file.isDirectory, thumbnailFile)
-
-            if (isDownloading && !file.isDirectory) {
-                if (!isSelectionMode) Spacer(modifier = Modifier.width(16.dp))
-                WavyCircularProgressIndicator(
-                    progress = downloadProgress,
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-            } else if (showEdgeThumbnail && !isSelectionMode) {
-                FileThumbnailFill(
-                    fileName = file.name,
-                    localFile = thumbnailFile,
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .aspectRatio(1f)
-                )
-                Spacer(modifier = Modifier.width(16.dp))
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                onSelectionToggle()
             } else {
-                if (!isSelectionMode) Spacer(modifier = Modifier.width(16.dp))
-                FileThumbnail(
-                    fileName = file.name,
-                    isDirectory = file.isDirectory,
-                    localFile = thumbnailFile,
-                    size = 40.dp,
-                    folderTint = MaterialTheme.colorScheme.primary,
-                    fileTint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(16.dp))
+                onClick()
             }
-
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
-                Text(
-                    text = file.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    if (!file.isDirectory && file.size > 0) {
-                        Text(
-                            text = formatFileSize(file.size),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    
-                    if (file.lastModified > 0) {
-                        Text(
-                            text = dateFormat.format(Date(file.lastModified)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+        },
+        onLongClick = if (isSelectionMode) {
+            null
+        } else {
+            {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                onLongPress()
             }
-            
-            if (file.isHidden) {
+        },
+        onLongClickLabel = "Select",
+        shapes = shapes,
+        modifier = modifier,
+        colors = fileRowColors(),
+        leadingContent = {
+            FileLeadingVisual(
+                file = file,
+                isSelected = isSelected,
+                isDownloading = isDownloading,
+                downloadProgress = downloadProgress,
+                thumbnailFile = thumbnailFile,
+                size = 48.dp,
+                iconSize = 24.dp
+            )
+        },
+        supportingContent = if (details.isNotEmpty()) {
+            { Text(details, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+        } else {
+            null
+        },
+        trailingContent = if (file.isHidden) {
+            {
                 Icon(
-                    imageVector = Icons.Default.Visibility,
+                    imageVector = Icons.Default.VisibilityOff,
                     contentDescription = "Hidden",
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    modifier = Modifier.size(18.dp)
                 )
             }
-
-            Spacer(modifier = Modifier.width(16.dp))
-            }
+        } else {
+            null
         }
+    ) {
+        Text(
+            text = file.name,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -1024,36 +1000,55 @@ private fun handleFileOpen(
     }
 }
 
+/** Expressive press feedback for grid tiles: corners tighten while held and spring back. */
+@Composable
+private fun tileCorner(interactionSource: MutableInteractionSource): Dp {
+    val pressed by interactionSource.collectIsPressedAsState()
+    val corner by animateDpAsState(
+        targetValue = if (pressed) 12.dp else 24.dp,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "GridTileCorner"
+    )
+    return corner
+}
+
 @Composable
 private fun ParentDirectoryGridItem(
     onNavigateUp: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
     Card(
         onClick = onNavigateUp,
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1.5f)
+            .aspectRatio(1.5f),
+        shape = RoundedCornerShape(tileCorner(interactionSource)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainer
+        ),
+        interactionSource = interactionSource
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp),
+                .padding(12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Icon(
+            ShapedIcon(
                 imageVector = Icons.Default.ArrowUpward,
-                contentDescription = "Parent Directory",
-                modifier = Modifier.size(32.dp),
-                tint = MaterialTheme.colorScheme.primary
+                shape = MaterialShapes.Cookie4Sided.toShape(),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(48.dp),
+                contentDescription = "Parent Directory"
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
                 text = "..",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium
+                style = MaterialTheme.typography.titleSmall
             )
         }
     }
@@ -1073,18 +1068,21 @@ private fun FileGridItem(
     thumbnailFile: File? = null
 ) {
     val hapticFeedback = LocalHapticFeedback.current
+    val interactionSource = remember { MutableInteractionSource() }
     val containerColor by animateColorAsState(
         targetValue = if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer
         } else {
-            MaterialTheme.colorScheme.surfaceContainerHighest
+            MaterialTheme.colorScheme.surfaceContainer
         },
+        animationSpec = MaterialTheme.motionScheme.defaultEffectsSpec(),
         label = "FileGridItemContainer"
     )
     Card(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(1.5f),
+        shape = RoundedCornerShape(tileCorner(interactionSource)),
         colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Box(
@@ -1094,6 +1092,8 @@ private fun FileGridItem(
                 // selection mode kept stale ones, so tapping a downloading file started a second
                 // download instead of cancelling), and adds ripple + TalkBack actions.
                 .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(),
                     onClick = {
                         if (isSelectionMode) {
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -1132,12 +1132,11 @@ private fun FileGridItem(
                                 colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
                             )
                         )
-                        .padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp)
+                        .padding(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 10.dp)
                 ) {
                     Text(
                         text = file.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
+                        style = MaterialTheme.typography.titleSmall,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = Color.White
@@ -1145,77 +1144,71 @@ private fun FileGridItem(
                     if (file.size > 0) {
                         Text(
                             text = formatFileSize(file.size),
-                            style = MaterialTheme.typography.bodySmall,
+                            style = MaterialTheme.typography.labelMedium,
                             color = Color.White.copy(alpha = 0.85f)
                         )
                     }
                 }
             } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                if (isDownloading && !file.isDirectory) {
-                    WavyCircularProgressIndicator(
-                        progress = downloadProgress,
-                        modifier = Modifier.size(32.dp),
-                        color = MaterialTheme.colorScheme.primary
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    FileLeadingVisual(
+                        file = file,
+                        // The corner badge shows selection on tiles
+                        isSelected = false,
+                        isDownloading = isDownloading,
+                        downloadProgress = downloadProgress,
+                        thumbnailFile = thumbnailFile,
+                        size = 44.dp,
+                        iconSize = 24.dp
                     )
-                } else {
-                    FileThumbnail(
-                        fileName = file.name,
-                        isDirectory = file.isDirectory,
-                        localFile = thumbnailFile,
-                        size = if (file.isDirectory) 40.dp else 48.dp,
-                        folderTint = MaterialTheme.colorScheme.primary,
-                        fileTint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
-                Text(
-                    text = file.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-
-                if (!file.isDirectory && file.size > 0) {
-                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = formatFileSize(file.size),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = file.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
                     )
-                }
 
-                if (file.isHidden) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Icon(
-                        imageVector = Icons.Default.Visibility,
-                        contentDescription = "Hidden",
-                        modifier = Modifier.size(12.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (!file.isDirectory && file.size > 0) {
+                        Text(
+                            text = formatFileSize(file.size),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
+
+            if (file.isHidden) {
+                Icon(
+                    imageVector = Icons.Default.VisibilityOff,
+                    contentDescription = "Hidden",
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(10.dp)
+                        .size(16.dp),
+                    tint = if (showFullThumbnail) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             if (isSelectionMode) {
                 Checkbox(
                     checked = isSelected,
-                    onCheckedChange = { 
+                    onCheckedChange = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        onSelectionToggle() 
+                        onSelectionToggle()
                     },
                     modifier = Modifier
-                        .align(androidx.compose.ui.Alignment.TopEnd)
+                        .align(Alignment.TopEnd)
                         .padding(4.dp)
                 )
             }

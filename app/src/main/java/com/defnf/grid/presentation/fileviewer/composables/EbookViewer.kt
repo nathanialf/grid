@@ -1,3 +1,5 @@
+@file:kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.defnf.grid.presentation.fileviewer.composables
 
 import android.util.Log
@@ -10,7 +12,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.NavigateBefore
@@ -74,7 +75,7 @@ fun EbookViewer(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "Loading ebook...",
@@ -444,9 +445,9 @@ fun EbookNavigationControls(
             .fillMaxWidth()
             .padding(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
         ),
-        shape = RoundedCornerShape(12.dp)
+        shape = MaterialTheme.shapes.extraLarge
     ) {
         Column(
             modifier = Modifier.padding(16.dp)
@@ -477,7 +478,8 @@ fun EbookNavigationControls(
             ) {
                 IconButton(
                     onClick = onPreviousChapter,
-                    enabled = canNavigatePrevious
+                    enabled = canNavigatePrevious,
+                    shapes = IconButtonDefaults.shapes()
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.NavigateBefore,
@@ -486,7 +488,7 @@ fun EbookNavigationControls(
                 }
                 
                 // Progress indicator
-                LinearProgressIndicator(
+                LinearWavyProgressIndicator(
                     progress = { currentChapter.toFloat() / totalChapters },
                     modifier = Modifier
                         .weight(1f)
@@ -495,7 +497,8 @@ fun EbookNavigationControls(
                 
                 IconButton(
                     onClick = onNextChapter,
-                    enabled = canNavigateNext
+                    enabled = canNavigateNext,
+                    shapes = IconButtonDefaults.shapes()
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.NavigateNext,
@@ -541,12 +544,12 @@ fun ResumeReadingDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onResume) {
+            TextButton(onClick = onResume, shapes = ButtonDefaults.shapes()) {
                 Text("Resume")
             }
         },
         dismissButton = {
-            TextButton(onClick = onStartOver) {
+            TextButton(onClick = onStartOver, shapes = ButtonDefaults.shapes()) {
                 Text("Start Over")
             }
         }

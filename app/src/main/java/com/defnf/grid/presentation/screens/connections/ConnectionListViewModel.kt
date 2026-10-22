@@ -159,6 +159,19 @@ class ConnectionListViewModel @Inject constructor(
         }
     }
     
+    /** Applies an order chosen by dragging, saving it once rather than after every step. */
+    fun saveConnectionOrder(orderedIds: List<String>) {
+        val byId = _uiState.value.connections.associateBy { it.id }
+        val reordered = orderedIds.mapNotNull { byId[it] }
+        // Ignore an order that no longer matches the list (a connection was added or removed mid-drag)
+        if (reordered.size != byId.size) return
+
+        _uiState.value = _uiState.value.copy(connections = reordered)
+        viewModelScope.launch {
+            reorderConnectionsUseCase(orderedIds)
+        }
+    }
+
     private var isAuthenticating = false
     
     fun authenticateWithBiometric(activity: FragmentActivity) {

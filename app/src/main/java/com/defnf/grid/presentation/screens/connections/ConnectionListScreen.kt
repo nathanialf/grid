@@ -25,9 +25,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -40,6 +44,8 @@ import com.defnf.grid.domain.model.Connection
 import com.defnf.grid.domain.model.Protocol
 import com.defnf.grid.presentation.components.ShapedIcon
 import com.defnf.grid.presentation.theme.GridTheme
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
 fun ConnectionListScreen(
@@ -57,6 +63,29 @@ fun ConnectionListScreen(
     val isUnlocked = !uiState.requiresBiometric || uiState.isBiometricAuthenticated
     // The FAB keeps its label at the top of the list and shrinks to its icon once scrolled
     val fabExpanded by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
+    val haptics = LocalHapticFeedback.current
+
+    // The order while a card is being dragged; null otherwise, so the saved order shows. It's
+    // saved once on drop instead of after every step.
+    var dragOrder by remember { mutableStateOf<List<Connection>?>(null) }
+    val shownConnections = dragOrder ?: uiState.connections
+    val reorderState = rememberReorderableLazyListState(listState) { from, to ->
+        val current = dragOrder ?: uiState.connections
+        val fromIndex = current.indexOfFirst { it.id == from.key }
+        val toIndex = current.indexOfFirst { it.id == to.key }
+        if (fromIndex >= 0 && toIndex >= 0) {
+            dragOrder = current.toMutableList().apply { add(toIndex, removeAt(fromIndex)) }
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+        }
+    }
+    val onDragStarted: (Offset) -> Unit = {
+        haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate)
+    }
+    val onDragStopped: () -> Unit = {
+        dragOrder?.let { order -> viewModel.saveConnectionOrder(order.map { it.id }) }
+        dragOrder = null
+        haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
+    }
 
 
     // Cast context to FragmentActivity (MainActivity extends FragmentActivity)
@@ -202,26 +231,44 @@ fun ConnectionListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     itemsIndexed(
-                        items = uiState.connections,
+                        items = shownConnections,
                         key = { _, connection -> connection.id }
                     ) { index, connection ->
-                        ConnectionCard(
-                            connection = connection,
-                            onConnect = { onNavigateToFileBrowser(connection.id) },
-                            onEdit = { onNavigateToEditConnection(connection.id) },
-                            onViewCachedFiles = { onNavigateToCachedFiles(connection.id) },
-                            onDelete = { viewModel.deleteConnection(connection.id) },
-                            onMoveUp = if (index > 0) {
-                                { viewModel.reorderConnections(index, index - 1) }
-                            } else null,
-                            onMoveDown = if (index < uiState.connections.size - 1) {
-                                { viewModel.reorderConnections(index, index + 1) }
-                            } else null,
-                            // Reordering slides the cards into place instead of jumping
-                            modifier = Modifier.animateItem(
+                        ReorderableItem(
+                            state = reorderState,
+                            key = connection.id,
+                            // Reordering slides the other cards into place instead of jumping
+                            animateItemModifier = Modifier.animateItem(
                                 placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                             )
-                        )
+                        ) { isDragging ->
+                            ConnectionCard(
+                                connection = connection,
+                                onConnect = { onNavigateToFileBrowser(connection.id) },
+                                onEdit = { onNavigateToEditConnection(connection.id) },
+                                onViewCachedFiles = { onNavigateToCachedFiles(connection.id) },
+                                onDelete = { viewModel.deleteConnection(connection.id) },
+                                // Kept for screen readers and anyone who prefers not to drag
+                                onMoveUp = if (index > 0) {
+                                    { viewModel.reorderConnections(index, index - 1) }
+                                } else null,
+                                onMoveDown = if (index < shownConnections.size - 1) {
+                                    { viewModel.reorderConnections(index, index + 1) }
+                                } else null,
+                                isDragging = isDragging,
+                                canReorder = shownConnections.size > 1,
+                                // Drag at once from the handle, or long-press anywhere on the card
+                                dragHandleModifier = Modifier.draggableHandle(
+                                    onDragStarted = onDragStarted,
+                                    onDragStopped = onDragStopped
+                                ),
+                                longPressDragModifier = Modifier.longPressDraggableHandle(
+                                    enabled = shownConnections.size > 1,
+                                    onDragStarted = onDragStarted,
+                                    onDragStopped = onDragStopped
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -351,17 +398,45 @@ private fun ConnectionCard(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
     onMoveUp: (() -> Unit)? = null,
-    onMoveDown: (() -> Unit)? = null
+    onMoveDown: (() -> Unit)? = null,
+    isDragging: Boolean = false,
+    canReorder: Boolean = false,
+    dragHandleModifier: Modifier = Modifier,
+    longPressDragModifier: Modifier = Modifier
 ) {
     var showDropdownMenu by remember { mutableStateOf(false) }
 
-    // Expressive press feedback: the card's corners tighten while held and spring back
+    // Expressive press feedback: the card's corners tighten while held and spring back.
+    // Picked up to reorder, it lifts instead: rounder, raised, slightly larger and brighter.
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val corner by animateDpAsState(
-        targetValue = if (pressed) 16.dp else 28.dp,
+        targetValue = when {
+            isDragging -> 40.dp
+            pressed -> 16.dp
+            else -> 28.dp
+        },
         animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "ConnectionCardCorner"
+    )
+    val lift by animateDpAsState(
+        targetValue = if (isDragging) 8.dp else 0.dp,
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "ConnectionCardLift"
+    )
+    val scale by animateFloatAsState(
+        targetValue = if (isDragging) 1.03f else 1f,
+        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "ConnectionCardScale"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (isDragging) {
+            MaterialTheme.colorScheme.surfaceContainerHighest
+        } else {
+            MaterialTheme.colorScheme.surfaceContainer
+        },
+        animationSpec = MaterialTheme.motionScheme.fastEffectsSpec(),
+        label = "ConnectionCardColor"
     )
 
     val location = when (connection.protocol) {
@@ -370,11 +445,16 @@ private fun ConnectionCard(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(longPressDragModifier),
         shape = RoundedCornerShape(corner),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = lift, pressedElevation = lift),
         onClick = onConnect,
         interactionSource = interactionSource
     ) {
@@ -413,6 +493,23 @@ private fun ConnectionCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                if (canReorder) {
+                    // Hidden from screen readers, which reorder through the menu's Move up/down
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .then(dragHandleModifier)
+                            .clearAndSetSemantics {},
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
 
                 Box {

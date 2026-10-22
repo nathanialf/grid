@@ -33,6 +33,7 @@ import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.BuildConfig
+import com.defnf.grid.presentation.components.GridAppIcon
 import com.defnf.grid.presentation.components.ShapedIcon
 import com.defnf.grid.presentation.theme.GridTheme
 
@@ -346,13 +347,10 @@ private fun AboutCard(onOpenWebsite: () -> Unit) {
                 modifier = Modifier.padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ShapedIcon(
-                    imageVector = Icons.Default.GridView,
-                    shape = MaterialShapes.Cookie9Sided.toShape(),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(64.dp),
-                    iconSize = 32.dp
+                // The real launcher icon, in the expressive squircle
+                GridAppIcon(
+                    shape = MaterialShapes.Square.toShape(),
+                    size = 64.dp
                 )
 
                 Spacer(modifier = Modifier.width(16.dp))

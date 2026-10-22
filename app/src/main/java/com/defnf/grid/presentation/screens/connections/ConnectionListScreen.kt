@@ -111,13 +111,17 @@ fun ConnectionListScreen(
         }
     }
 
+    // Load and delete failures used to be dropped silently
+    val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            // Handle error display if needed
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(error)
+            viewModel.clearError()
         }
     }
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             // Expressive flexible app bar: a large title that collapses as the list scrolls
             LargeFlexibleTopAppBar(

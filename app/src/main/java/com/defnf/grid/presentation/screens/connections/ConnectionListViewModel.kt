@@ -122,7 +122,9 @@ class ConnectionListViewModel @Inject constructor(
             )
             
             when (val result = deleteConnectionUseCase(connectionId)) {
-                is Result.Success -> loadConnections()
+                // The connections flow is live, so it drops the deleted card by itself; reloading
+                // here only flashed the loading spinner
+                is Result.Success -> Unit
                 is Result.Error -> {
                     _uiState.value = _uiState.value.copy(
                         error = result.exception.message ?: "Failed to delete connection"

@@ -303,6 +303,10 @@ private fun ConnectedChoiceGroup(
             ToggleButton(
                 checked = value == choice.value,
                 onCheckedChange = { onValueChange(choice.value) },
+                // Unchecked buttons default to the section's own tone; lift them so they read as buttons
+                colors = ToggleButtonDefaults.colors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                ),
                 shapes = when (index) {
                     0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                     choices.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()

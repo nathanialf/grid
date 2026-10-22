@@ -454,6 +454,10 @@ private fun ProtocolPicker(
                 ToggleButton(
                     checked = selected == protocol,
                     onCheckedChange = { onSelect(protocol) },
+                    // Unchecked buttons default to the section's own tone; lift them so they read as buttons
+                    colors = ToggleButtonDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    ),
                     shapes = when (index) {
                         0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                         protocols.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
@@ -598,6 +602,10 @@ private fun SshKeySection(
                 ToggleButton(
                     checked = inUse,
                     onCheckedChange = { use -> if (use) onUseGeneratedKey() else onClearKey() },
+                    // Unchecked buttons default to the section's own tone; lift them so they read as buttons
+                    colors = ToggleButtonDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    ),
                     icon = {
                         Icon(
                             imageVector = if (inUse) Icons.Default.Check else Icons.Default.Key,

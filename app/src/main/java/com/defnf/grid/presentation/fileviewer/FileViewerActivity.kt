@@ -1,3 +1,5 @@
+@file:kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.defnf.grid.presentation.fileviewer
 
 import android.os.Bundle
@@ -140,7 +142,7 @@ fun FileViewerScreen(
             title = { Text("Error") },
             text = { Text(error) },
             confirmButton = {
-                TextButton(onClick = { viewModel.clearSaveError() }) {
+                TextButton(onClick = { viewModel.clearSaveError() }, shapes = ButtonDefaults.shapes()) {
                     Text("OK")
                 }
             }

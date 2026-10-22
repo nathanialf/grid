@@ -42,6 +42,20 @@ class PreferencesManager @Inject constructor(
         }
     }
     
+    /**
+     * Rewrites the saved connections in one atomic edit, so concurrent updates can't overwrite each
+     * other with a stale list and observers see a single change.
+     */
+    suspend fun updateConnections(transform: (List<Connection>) -> List<Connection>) {
+        dataStore.edit { preferences ->
+            // A decode failure throws and aborts the edit rather than wiping the saved list
+            val current = preferences[CONNECTIONS_KEY]
+                ?.let { json.decodeFromString<List<Connection>>(it) }
+                ?: emptyList()
+            preferences[CONNECTIONS_KEY] = json.encodeToString(transform(current))
+        }
+    }
+
     fun getConnections(): Flow<List<Connection>> {
         return dataStore.data.map { preferences ->
             preferences[CONNECTIONS_KEY]?.let { connectionsJson ->

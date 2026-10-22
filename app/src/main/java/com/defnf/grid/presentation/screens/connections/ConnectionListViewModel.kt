@@ -11,10 +11,12 @@ import com.defnf.grid.domain.usecase.settings.GetSettingsUseCase
 import com.defnf.grid.data.local.BiometricManager
 import androidx.fragment.app.FragmentActivity
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -37,7 +39,9 @@ class ConnectionListViewModel @Inject constructor(
     
     private fun observeSettingsAndCheckBiometric() {
         viewModelScope.launch {
-            getSettingsUseCase.invoke().collect { settings ->
+            // Settings share a DataStore with connections, so every connection write re-emits
+            // them unchanged; without this each write restarted the load and flashed the spinner
+            getSettingsUseCase.invoke().distinctUntilChanged().collect { settings ->
                 try {
                     val biometricAvailable = biometricManager.isBiometricAvailable()
                     val requiresBiometric = settings.biometricEnabled && biometricAvailable
@@ -75,8 +79,12 @@ class ConnectionListViewModel @Inject constructor(
         }
     }
 
+    private var connectionsJob: Job? = null
+
     private fun loadConnections() {
-        viewModelScope.launch {
+        // Replace the previous collector instead of stacking another one on every reload
+        connectionsJob?.cancel()
+        connectionsJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
             
             getAllConnectionsUseCase()
@@ -114,7 +122,9 @@ class ConnectionListViewModel @Inject constructor(
             )
             
             when (val result = deleteConnectionUseCase(connectionId)) {
-                is Result.Success -> loadConnections()
+                // The connections flow is live, so it drops the deleted card by itself; reloading
+                // here only flashed the loading spinner
+                is Result.Success -> Unit
                 is Result.Error -> {
                     _uiState.value = _uiState.value.copy(
                         error = result.exception.message ?: "Failed to delete connection"
@@ -141,24 +151,24 @@ class ConnectionListViewModel @Inject constructor(
     }
     
     fun reorderConnections(fromIndex: Int, toIndex: Int) {
-        val currentConnections = _uiState.value.connections.toMutableList()
-        if (fromIndex >= 0 && fromIndex < currentConnections.size && 
-            toIndex >= 0 && toIndex < currentConnections.size) {
-            
-            val connection = currentConnections.removeAt(fromIndex)
-            currentConnections.add(toIndex, connection)
-            
-            // Update UI state immediately for smooth UX
-            _uiState.value = _uiState.value.copy(connections = currentConnections)
-            
-            // Save new order to repository
-            viewModelScope.launch {
-                val connectionIds = currentConnections.map { it.id }
-                reorderConnectionsUseCase(connectionIds)
-            }
+        val ids = _uiState.value.connections.map { it.id }
+        if (fromIndex in ids.indices && toIndex in ids.indices) {
+            saveConnectionOrder(ids.toMutableList().apply { add(toIndex, removeAt(fromIndex)) })
         }
     }
     
+    /** Applies an order chosen by dragging, saving it once rather than after every step. */
+    fun saveConnectionOrder(orderedIds: List<String>) {
+        val byId = _uiState.value.connections.associateBy { it.id }
+        // Ignore an order that no longer matches the list (a connection was added or removed mid-drag)
+        if (orderedIds.size != byId.size || orderedIds.toSet() != byId.keys) return
+
+        _uiState.value = _uiState.value.copy(connections = orderedIds.map { byId.getValue(it) })
+        viewModelScope.launch {
+            reorderConnectionsUseCase(orderedIds)
+        }
+    }
+
     private var isAuthenticating = false
     
     fun authenticateWithBiometric(activity: FragmentActivity) {

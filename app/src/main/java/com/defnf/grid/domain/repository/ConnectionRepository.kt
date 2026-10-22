@@ -12,5 +12,6 @@ interface ConnectionRepository {
     suspend fun deleteConnection(id: String): Result<Unit>
     suspend fun saveConnection(connection: Connection): Result<Unit>
     suspend fun updateLastConnected(connectionId: String): Result<Unit>
-    suspend fun updateConnectionOrder(connectionId: String, newOrder: Int): Result<Unit>
+    /** Saves [orderedIds] as the connections' order in a single write. */
+    suspend fun reorderConnections(orderedIds: List<String>): Result<Unit>
 }

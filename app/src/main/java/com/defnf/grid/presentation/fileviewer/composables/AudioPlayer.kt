@@ -1,3 +1,5 @@
+@file:kotlin.OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.defnf.grid.presentation.fileviewer.composables
 
 import androidx.compose.animation.*
@@ -154,7 +156,7 @@ fun AudioPlayer(
     ) { state ->
         when (state) {
             AudioScreenState.Loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
+                LoadingIndicator()
             }
             AudioScreenState.Error -> ErrorState(
                 message = error.orEmpty(),
@@ -418,7 +420,8 @@ private fun Controls(controller: MediaController?, playback: PlaybackState) {
                     }
                 },
                 enabled = enabled,
-                modifier = Modifier.size(56.dp)
+                modifier = Modifier.size(56.dp),
+                shapes = IconButtonDefaults.shapes()
             ) {
                 Icon(Icons.Default.Replay10, contentDescription = "Back 10 seconds")
             }
@@ -474,7 +477,8 @@ private fun Controls(controller: MediaController?, playback: PlaybackState) {
                     }
                 },
                 enabled = enabled,
-                modifier = Modifier.size(56.dp)
+                modifier = Modifier.size(56.dp),
+                shapes = IconButtonDefaults.shapes()
             ) {
                 Icon(Icons.Default.Forward10, contentDescription = "Forward 10 seconds")
             }
@@ -488,7 +492,7 @@ private fun Controls(controller: MediaController?, playback: PlaybackState) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error
                 )
-                TextButton(onClick = { controller?.prepare() }) { Text("Retry") }
+                TextButton(onClick = { controller?.prepare() }, shapes = ButtonDefaults.shapes()) { Text("Retry") }
             }
         }
     }
@@ -517,6 +521,6 @@ private fun ErrorState(message: String, onRetry: () -> Unit) {
             textAlign = TextAlign.Center
         )
         Spacer(Modifier.height(16.dp))
-        FilledTonalButton(onClick = onRetry) { Text("Retry") }
+        FilledTonalButton(onClick = onRetry, shapes = ButtonDefaults.shapes()) { Text("Retry") }
     }
 }

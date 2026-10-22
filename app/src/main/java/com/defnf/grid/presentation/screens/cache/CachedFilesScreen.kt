@@ -6,10 +6,8 @@
 package com.defnf.grid.presentation.screens.cache
 
 import android.text.format.Formatter
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -24,7 +22,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -41,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.domain.model.CachedFile
 import com.defnf.grid.presentation.components.FileThumbnailFill
+import com.defnf.grid.presentation.components.ShapedIcon
+import com.defnf.grid.presentation.components.animatedPressCorner
 import com.defnf.grid.presentation.components.hasThumbnail
 import com.defnf.grid.presentation.util.getFileIcon
 import java.io.File
@@ -425,12 +424,7 @@ private fun CachedFileGridItem(
 
     // Expressive press feedback: the tile's corners tighten while held and spring back
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val corner by animateDpAsState(
-        targetValue = if (pressed) 12.dp else 24.dp,
-        animationSpec = MaterialTheme.motionScheme.fastSpatialSpec(),
-        label = "GridTileCorner"
-    )
+    val corner = animatedPressCorner(interactionSource)
 
     Card(
         modifier = Modifier
@@ -608,31 +602,6 @@ private fun CachedFileItem(
                 onDelete()
             },
             onDismiss = { showDeleteConfirmation = false }
-        )
-    }
-}
-
-/** An icon centred in a filled container clipped to one of the Material 3 Expressive shapes. */
-@Composable
-private fun ShapedIcon(
-    imageVector: androidx.compose.ui.graphics.vector.ImageVector,
-    shape: Shape,
-    containerColor: Color,
-    contentColor: Color,
-    modifier: Modifier = Modifier,
-    iconSize: androidx.compose.ui.unit.Dp = 24.dp
-) {
-    Box(
-        modifier = modifier
-            .clip(shape)
-            .background(containerColor),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = imageVector,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(iconSize)
         )
     }
 }

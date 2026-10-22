@@ -157,6 +157,7 @@ dependencies {
     
     // Additional Compose dependencies
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.reorderable) // Drag-to-reorder for the connection list
     implementation(libs.androidx.palette.ktx) // For album art color extraction
     
     // Dependency Injection

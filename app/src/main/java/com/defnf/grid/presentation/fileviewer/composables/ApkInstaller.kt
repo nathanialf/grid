@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.filled.InstallMobile
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -20,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
+import com.defnf.grid.presentation.components.ShapedIcon
 import java.io.File
 
 private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
@@ -29,6 +32,7 @@ private const val APK_MIME_TYPE = "application/vnd.android.package-archive"
  * the screen opens; if Grid isn't yet allowed to install unknown apps (Android 8+), the user is
  * asked to grant that in Settings first and the install resumes when they come back.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ApkInstaller(
     file: File,
@@ -66,18 +70,25 @@ fun ApkInstaller(
     if (showPermissionDialog) {
         AlertDialog(
             onDismissRequest = { showPermissionDialog = false },
+            icon = { Icon(Icons.Default.Security, contentDescription = null) },
             title = { Text("Allow app installs") },
             text = {
                 Text("To install ${file.name}, allow Grid to install unknown apps in Settings, then come back.")
             },
             confirmButton = {
-                TextButton(onClick = {
-                    showPermissionDialog = false
-                    settingsLauncher.launch(unknownSourcesSettingsIntent(context))
-                }) { Text("Open Settings") }
+                TextButton(
+                    onClick = {
+                        showPermissionDialog = false
+                        settingsLauncher.launch(unknownSourcesSettingsIntent(context))
+                    },
+                    shapes = ButtonDefaults.shapes()
+                ) { Text("Open Settings") }
             },
             dismissButton = {
-                TextButton(onClick = { showPermissionDialog = false }) { Text("Cancel") }
+                TextButton(
+                    onClick = { showPermissionDialog = false },
+                    shapes = ButtonDefaults.shapes()
+                ) { Text("Cancel") }
             }
         )
     }
@@ -89,18 +100,20 @@ fun ApkInstaller(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
+        ShapedIcon(
             imageVector = Icons.Default.Android,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary
+            shape = MaterialShapes.Cookie9Sided.toShape(),
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.size(128.dp),
+            iconSize = 56.dp
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             text = file.name,
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmallEmphasized,
             textAlign = TextAlign.Center
         )
 
@@ -116,8 +129,20 @@ fun ApkInstaller(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(onClick = { install() }) {
-            Text("Install")
+        val buttonHeight = ButtonDefaults.MediumContainerHeight
+        Button(
+            onClick = { install() },
+            shapes = ButtonDefaults.shapesFor(buttonHeight),
+            contentPadding = ButtonDefaults.contentPaddingFor(buttonHeight, hasStartIcon = true),
+            modifier = Modifier.heightIn(min = buttonHeight)
+        ) {
+            Icon(
+                imageVector = Icons.Default.InstallMobile,
+                contentDescription = null,
+                modifier = Modifier.size(ButtonDefaults.iconSizeFor(buttonHeight))
+            )
+            Spacer(modifier = Modifier.width(ButtonDefaults.iconSpacingFor(buttonHeight)))
+            Text("Install", style = ButtonDefaults.textStyleFor(buttonHeight))
         }
     }
 }

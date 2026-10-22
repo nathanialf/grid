@@ -16,7 +16,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.defnf.grid.presentation.components.WavyCircularProgressIndicator
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FileViewerTopBar(
     fileName: String,
@@ -50,28 +50,24 @@ fun FileViewerTopBar(
         else -> "File"
     }
     
-    CenterAlignedTopAppBar(
+    TopAppBar(
         title = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = viewerType,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    text = fileName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-            }
+            Text(
+                text = viewerType,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
         },
+        subtitle = {
+            Text(
+                text = fileName,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center
+            )
+        },
+        titleHorizontalAlignment = Alignment.CenterHorizontally,
         colors = if (transparent) {
             TopAppBarDefaults.topAppBarColors(
                 containerColor = androidx.compose.ui.graphics.Color.Transparent,
@@ -81,7 +77,7 @@ fun FileViewerTopBar(
             TopAppBarDefaults.topAppBarColors()
         },
         navigationIcon = {
-            IconButton(onClick = onBack) {
+            IconButton(onClick = onBack, shapes = IconButtonDefaults.shapes()) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back"
@@ -92,23 +88,26 @@ fun FileViewerTopBar(
             when {
                 isEditMode && canSave -> {
                     // Save button
-                    IconButton(onClick = onSave, enabled = !isSaving) {
+                    FilledIconButton(
+                        onClick = onSave,
+                        enabled = !isSaving,
+                        shapes = IconButtonDefaults.shapes()
+                    ) {
                         if (isSaving) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
+                            WavyCircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = LocalContentColor.current
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Default.Save,
-                                contentDescription = "Save",
-                                tint = MaterialTheme.colorScheme.primary
+                                contentDescription = "Save"
                             )
                         }
                     }
                     
                     // Exit edit button
-                    IconButton(onClick = onExitEdit) {
+                    IconButton(onClick = onExitEdit, shapes = IconButtonDefaults.shapes()) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Exit editor",
@@ -121,7 +120,8 @@ fun FileViewerTopBar(
                     // Extract button for archives
                     IconButton(
                         onClick = onExtract,
-                        enabled = !isExtracting
+                        enabled = !isExtracting,
+                        shapes = IconButtonDefaults.shapes()
                     ) {
                         if (isExtracting) {
                             WavyCircularProgressIndicator(
@@ -141,7 +141,7 @@ fun FileViewerTopBar(
                 
                 canEdit && !isEditMode -> {
                     // Edit button for editable files
-                    IconButton(onClick = onEdit) {
+                    IconButton(onClick = onEdit, shapes = IconButtonDefaults.shapes()) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit file",

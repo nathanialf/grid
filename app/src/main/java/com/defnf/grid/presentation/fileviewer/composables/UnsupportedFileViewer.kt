@@ -17,8 +17,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import com.defnf.grid.presentation.components.ShapedIcon
 import java.io.File
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun UnsupportedFileViewer(
     file: File,
@@ -33,18 +35,20 @@ fun UnsupportedFileViewer(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
+        ShapedIcon(
             imageVector = Icons.AutoMirrored.Filled.InsertDriveFile,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
+            shape = MaterialShapes.Cookie9Sided.toShape(),
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = Modifier.size(128.dp),
+            iconSize = 56.dp
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             text = "Grid can't preview this file",
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.headlineSmallEmphasized,
             textAlign = TextAlign.Center
         )
 
@@ -68,7 +72,10 @@ fun UnsupportedFileViewer(
         Spacer(modifier = Modifier.height(24.dp))
 
         // Hand the file to another app rather than leaving the user at a dead end
-        FilledTonalButton(onClick = { openWithAnotherApp(context, file, displayName) }) {
+        FilledTonalButton(
+            onClick = { openWithAnotherApp(context, file, displayName) },
+            shapes = ButtonDefaults.shapes()
+        ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                 contentDescription = null,

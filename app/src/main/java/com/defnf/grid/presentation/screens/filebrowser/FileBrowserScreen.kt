@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import com.defnf.grid.presentation.components.HostKeyChangedDialog
 import com.defnf.grid.presentation.components.ShapedIcon
 import com.defnf.grid.presentation.components.animatedPressCorner
+import com.defnf.grid.presentation.components.launcherIconShape
 import com.defnf.grid.presentation.util.getFileIcon
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.shape.CircleShape
@@ -757,7 +758,7 @@ private fun ParentDirectoryItem(
         leadingContent = {
             ShapedIcon(
                 imageVector = Icons.Default.ArrowUpward,
-                shape = MaterialShapes.Cookie4Sided.toShape(),
+                shape = launcherIconShape(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(48.dp),
@@ -807,7 +808,7 @@ private fun FileLeadingVisual(
             isDownloading && !file.isDirectory -> Box(
                 modifier = Modifier
                     .size(size)
-                    .clip(MaterialShapes.Cookie4Sided.toShape())
+                    .clip(launcherIconShape())
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -828,7 +829,7 @@ private fun FileLeadingVisual(
 
             file.isDirectory -> ShapedIcon(
                 imageVector = Icons.Default.Folder,
-                shape = MaterialShapes.Cookie9Sided.toShape(),
+                shape = launcherIconShape(),
                 containerColor = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(size),
@@ -838,7 +839,7 @@ private fun FileLeadingVisual(
 
             else -> ShapedIcon(
                 imageVector = getFileIcon(file.name),
-                shape = MaterialShapes.Cookie4Sided.toShape(),
+                shape = launcherIconShape(),
                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 modifier = Modifier.size(size),
@@ -1025,7 +1026,7 @@ private fun ParentDirectoryGridItem(
         ) {
             ShapedIcon(
                 imageVector = Icons.Default.ArrowUpward,
-                shape = MaterialShapes.Cookie4Sided.toShape(),
+                shape = launcherIconShape(),
                 containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(48.dp),

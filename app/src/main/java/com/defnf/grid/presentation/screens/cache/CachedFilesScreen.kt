@@ -41,6 +41,7 @@ import com.defnf.grid.presentation.components.FileThumbnailFill
 import com.defnf.grid.presentation.components.ShapedIcon
 import com.defnf.grid.presentation.components.animatedPressCorner
 import com.defnf.grid.presentation.components.hasThumbnail
+import com.defnf.grid.presentation.components.launcherIconShape
 import com.defnf.grid.presentation.util.getFileIcon
 import java.io.File
 import java.text.SimpleDateFormat
@@ -611,7 +612,7 @@ private fun CachedFileItem(
 private fun FileTypeIcon(fileName: String) {
     ShapedIcon(
         imageVector = getFileIcon(fileName),
-        shape = MaterialShapes.Cookie4Sided.toShape(),
+        shape = launcherIconShape(),
         containerColor = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
         modifier = Modifier.size(56.dp),

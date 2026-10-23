@@ -27,7 +27,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -43,6 +42,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.domain.model.Connection
 import com.defnf.grid.domain.model.Protocol
 import com.defnf.grid.presentation.components.ShapedIcon
+import com.defnf.grid.presentation.components.launcherIconShape
 import com.defnf.grid.presentation.theme.GridTheme
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -374,13 +374,7 @@ private fun EmptyConnectionsView(
     }
 }
 
-/** The protocol's shape and tone, so SFTP and SMB connections tell apart at a glance. */
-@Composable
-private fun protocolShape(protocol: Protocol): Shape = when (protocol) {
-    Protocol.SFTP -> MaterialShapes.Cookie9Sided.toShape()
-    Protocol.SMB -> MaterialShapes.Clover4Leaf.toShape()
-}
-
+/** The protocol's tone, so SFTP and SMB connections tell apart at a glance. */
 @Composable
 private fun protocolContainerColor(protocol: Protocol): Color = when (protocol) {
     Protocol.SFTP -> MaterialTheme.colorScheme.primaryContainer
@@ -473,7 +467,7 @@ private fun ConnectionCard(
             ) {
                 ShapedIcon(
                     imageVector = connection.protocol.icon,
-                    shape = protocolShape(connection.protocol),
+                    shape = launcherIconShape(),
                     containerColor = protocolContainerColor(connection.protocol),
                     contentColor = protocolContentColor(connection.protocol),
                     modifier = Modifier.size(56.dp),

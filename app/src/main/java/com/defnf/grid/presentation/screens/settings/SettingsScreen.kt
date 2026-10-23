@@ -35,6 +35,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.defnf.grid.BuildConfig
 import com.defnf.grid.presentation.components.GridAppIcon
 import com.defnf.grid.presentation.components.ShapedIcon
+import com.defnf.grid.presentation.components.launcherIconShape
 import com.defnf.grid.presentation.theme.GridTheme
 
 /** One option of a connected button group: stored value, label and icon. */
@@ -173,7 +174,7 @@ private fun SettingsSectionHeader(title: String) {
     )
 }
 
-/** The leading icon of a settings row: a small icon on an expressive cookie shape. */
+/** The leading icon of a settings row: a small icon on the launcher icon shape. */
 @Composable
 private fun SettingsIcon(
     icon: ImageVector,
@@ -182,7 +183,7 @@ private fun SettingsIcon(
 ) {
     ShapedIcon(
         imageVector = icon,
-        shape = MaterialShapes.Cookie4Sided.toShape(),
+        shape = launcherIconShape(),
         containerColor = containerColor,
         contentColor = contentColor,
         modifier = Modifier.size(40.dp),
